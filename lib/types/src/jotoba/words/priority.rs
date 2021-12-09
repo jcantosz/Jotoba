@@ -1,7 +1,5 @@
-use std::convert::TryFrom;
-
-use crate::parse::error::{self, Error};
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 
 /// Priority indicator of kanji/reading element
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Hash, Eq)]
@@ -27,29 +25,29 @@ impl Into<String> for Priority {
 }
 
 impl TryFrom<&str> for Priority {
-    type Error = error::Error;
+    type Error = ();
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         if let Some(end) = value.strip_prefix("news") {
-            return Ok(Priority::News(end.parse()?));
+            return Ok(Priority::News(end.parse().map_err(|_| ())?));
         }
 
         if let Some(end) = value.strip_prefix("ichi") {
-            return Ok(Priority::Ichi(end.parse()?));
+            return Ok(Priority::Ichi(end.parse().map_err(|_| ())?));
         }
 
         if let Some(end) = value.strip_prefix("spec") {
-            return Ok(Priority::Spec(end.parse()?));
+            return Ok(Priority::Spec(end.parse().map_err(|_| ())?));
         }
 
         if let Some(end) = value.strip_prefix("gai") {
-            return Ok(Priority::Gai(end.parse()?));
+            return Ok(Priority::Gai(end.parse().map_err(|_| ())?));
         }
 
         if let Some(end) = value.strip_prefix("nf") {
-            return Ok(Priority::Nf(end.parse()?));
+            return Ok(Priority::Nf(end.parse().map_err(|_| ())?));
         }
 
-        Err(Error::Undefined)
+        Err(())
     }
 }
 

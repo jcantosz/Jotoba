@@ -97,6 +97,17 @@
     margin-top: -10px;
 }
 
+.settings-entry.sub > .inner-title {
+    width: 55%;
+    margin-left: 5%;
+}
+
+.settings-entry.sub > .inner-title::before {
+    content: "↪";
+    margin-left: -5px;
+    margin-right: 5px;
+}
+
 .mdl-checkbox {
     width: 0%;
 }
@@ -156,6 +167,10 @@
 	
     .inner-title {
         width: 70%;
+    }
+
+    .settings-entry.sub > .inner-title {
+        width: 65%;
     }
 
     .inner-title.big {

@@ -1,3 +1,4 @@
+#[cfg(feature = "jotoba_intern")]
 use localization::traits::Translatable;
 use strum_macros::{AsRefStr, EnumString};
 
@@ -116,6 +117,7 @@ pub enum Misc {
     Yojijukugo,
 }
 
+#[cfg(feature = "jotoba_intern")]
 impl Translatable for Misc {
     fn get_id(&self) -> &'static str {
         match self {

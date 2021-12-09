@@ -1,5 +1,6 @@
-use resources::parse::jmdict::{
-    dialect::Dialect, field::Field, languages::Language, misc::Misc, part_of_speech::PartOfSpeech,
+use types::jotoba::{
+    languages::Language,
+    words::{dialect::Dialect, field::Field, misc::Misc, part_of_speech::PartOfSpeech},
 };
 
 use search::word::result::{Item, WordResult};
@@ -24,6 +25,14 @@ pub struct Word {
     alt_readings: Option<Vec<Reading>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     audio: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pitch: Option<Vec<PitchItem>>,
+}
+
+#[derive(Serialize)]
+pub struct PitchItem {
+    part: String,
+    high: bool,
 }
 
 #[derive(Serialize)]
@@ -54,8 +63,8 @@ pub struct Sense {
     xref: Option<String>,
 }
 
-impl From<&resources::models::words::Sense> for Sense {
-    fn from(sense: &resources::models::words::Sense) -> Self {
+impl From<&types::jotoba::words::sense::Sense> for Sense {
+    fn from(sense: &types::jotoba::words::sense::Sense) -> Self {
         let pos = sense.part_of_speech.clone();
 
         let glosses = sense
@@ -78,14 +87,19 @@ impl From<&resources::models::words::Sense> for Sense {
     }
 }
 
-impl From<&resources::models::words::Word> for Word {
+impl From<&types::jotoba::words::Word> for Word {
     #[inline]
-    fn from(word: &resources::models::words::Word) -> Self {
+    fn from(word: &types::jotoba::words::Word) -> Self {
         let kanji = word.reading.kanji.as_ref().map(|i| i.reading.clone());
         let kana = word.reading.kana.clone().reading;
         let furigana = word.furigana.clone();
 
         let senses = word.senses.iter().map(|i| Sense::from(i)).collect();
+
+        let pitch = word.accents.as_ref().and_then(|accents| {
+            japanese::accent::calc_pitch(&word.reading.kana.reading, accents[0] as i32)
+                .map(|i| i.into_iter().map(|j| j.into()).collect::<Vec<PitchItem>>())
+        });
 
         Self {
             common: word.is_common(),
@@ -100,6 +114,7 @@ impl From<&resources::models::words::Word> for Word {
                 .audio_file("mp3")
                 .as_ref()
                 .map(|i| format!("/audio/{}", i)),
+            pitch,
         }
     }
 }
@@ -134,4 +149,14 @@ fn convert_words(wres: &WordResult) -> Vec<Word> {
             _ => None,
         })
         .collect()
+}
+
+impl From<(&str, bool)> for PitchItem {
+    #[inline]
+    fn from((part, high): (&str, bool)) -> Self {
+        Self {
+            part: part.to_owned(),
+            high,
+        }
+    }
 }

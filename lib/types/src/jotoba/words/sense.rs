@@ -1,20 +1,23 @@
-use crate::parse::jmdict::{
+use crate::jotoba::languages::Language;
+
+use super::{
     dialect::Dialect,
     field::Field,
+    foreign_language::ForeignLanguage,
     gtype::GType,
-    languages::Language,
     misc::Misc,
     part_of_speech::{PartOfSpeech, PosSimple},
-    Gairaigo,
 };
-use itertools::Itertools;
-use localization::{language::Language as LocLanguage, traits::Translatable, TranslationDict};
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "jotoba_intern")]
+use localization::{language::Language as LocLanguage, traits::Translatable, TranslationDict};
 
 /// A single sense for a word. Represents one language,
 /// one misc item and 1..n glosses
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, Hash)]
 pub struct Sense {
+    pub id: u8,
     pub misc: Option<Misc>,
     pub field: Option<Field>,
     pub dialect: Option<Dialect>,
@@ -28,6 +31,13 @@ pub struct Sense {
     pub gairaigo: Option<Gairaigo>,
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Deserialize, Serialize, Hash)]
+pub struct Gairaigo {
+    pub language: ForeignLanguage,
+    pub fully_derived: bool,
+    pub original: String,
+}
+
 impl Eq for Sense {}
 
 /// A gloss value represents one word in the
@@ -36,12 +46,32 @@ impl Eq for Sense {}
 pub struct Gloss {
     pub gloss: String,
     pub g_type: Option<GType>,
+    pub occurrence: u32,
 }
 
+impl Sense {
+    /// Get all pos_simple of a sense
+    pub fn get_pos_simple(&self) -> Vec<PosSimple> {
+        let mut pos_simple = self
+            .part_of_speech
+            .iter()
+            .map(|i| i.to_pos_simple())
+            .flatten()
+            .collect::<Vec<_>>();
+
+        pos_simple.sort_unstable();
+        pos_simple.dedup();
+        pos_simple
+    }
+}
+
+// Jotoba intern only features
+#[cfg(feature = "jotoba_intern")]
 impl Sense {
     /// Get a senses tags prettified
     #[inline]
     pub fn get_glosses(&self) -> String {
+        use itertools::Itertools;
         self.glosses.iter().map(|i| i.gloss.clone()).join("; ")
     }
 
@@ -59,22 +89,9 @@ impl Sense {
             .and_then(|antonym| antonym.split('・').next())
     }
 
-    /// Get all pos_simple of a sense
-    pub fn get_pos_simple(&self) -> Vec<PosSimple> {
-        let mut pos_simple = self
-            .part_of_speech
-            .iter()
-            .map(|i| i.to_pos_simple())
-            .flatten()
-            .collect::<Vec<_>>();
-
-        pos_simple.sort_unstable();
-        pos_simple.dedup();
-        pos_simple
-    }
-
     // Get a senses tags prettified
     pub fn get_parts_of_speech(&self, dict: &TranslationDict, language: LocLanguage) -> String {
+        use itertools::Itertools;
         self.part_of_speech
             .iter()
             .map(|i| i.gettext_custom(dict, Some(language)))
@@ -120,6 +137,7 @@ impl Sense {
         dict: &TranslationDict,
         language: LocLanguage,
     ) -> Option<String> {
+        use itertools::Itertools;
         let arr: [Option<String>; 3] = [
             self.misc
                 .map(|i| i.gettext(dict, Some(language)).to_owned()),
@@ -130,7 +148,7 @@ impl Sense {
         let res = arr
             .iter()
             .filter_map(|i| i.is_some().then(|| i.as_ref().unwrap()))
-            .collect_vec();
+            .collect::<Vec<_>>();
 
         if res.is_empty() {
             return None;

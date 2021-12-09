@@ -1,10 +1,8 @@
 pub mod index;
 
 use crate::engine::{document::SentenceDocument, simple_gen_doc::GenDoc, Indexable, SearchEngine};
-use resources::{
-    models::{sentences::Sentence, storage::ResourceStorage},
-    parse::jmdict::languages::Language,
-};
+use resources::models::storage::ResourceStorage;
+use types::jotoba::{languages::Language, sentences::Sentence};
 use vector_space_model::{DefaultMetadata, DocumentVector};
 
 pub struct Engine {}
@@ -36,9 +34,12 @@ impl SearchEngine for Engine {
     fn gen_query_vector(
         index: &vector_space_model::Index<Self::Document, Self::Metadata>,
         query: &str,
-    ) -> Option<DocumentVector<Self::GenDoc>> {
+        _allow_align: bool,
+        _language: Option<Language>,
+    ) -> Option<(DocumentVector<Self::GenDoc>, String)> {
         let terms = tinysegmenter::tokenize(query);
         let query_document = GenDoc::new(terms);
-        DocumentVector::new(index.get_indexer(), query_document.clone())
+        let vec = DocumentVector::new(index.get_indexer(), query_document.clone())?;
+        Some((vec, query.to_string()))
     }
 }

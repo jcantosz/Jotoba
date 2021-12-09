@@ -1,9 +1,7 @@
 use std::convert::TryFrom;
 
-use strum_macros::{AsRefStr, EnumString};
-
-use crate::parse::error;
 use serde::{Deserialize, Serialize};
+use strum_macros::{AsRefStr, EnumString};
 
 #[derive(Debug, PartialEq, Clone, Copy, AsRefStr, EnumString, Serialize, Deserialize, Hash)]
 #[repr(u8)]
@@ -17,13 +15,13 @@ pub enum GType {
 }
 
 impl TryFrom<i32> for GType {
-    type Error = error::Error;
+    type Error = ();
     fn try_from(i: i32) -> Result<Self, Self::Error> {
         Ok(match i {
             0 => Self::Literal,
             1 => Self::Figurative,
             2 => Self::Explanation,
-            _ => return Err(error::Error::ParseError),
+            _ => return Err(()),
         })
     }
 }

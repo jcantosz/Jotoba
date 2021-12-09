@@ -7,7 +7,7 @@ use crate::{
 use error::Error;
 use itertools::Itertools;
 use japanese::{CharType, JapaneseExt};
-use resources::models::{
+use types::jotoba::{
     kanji::{self, Kanji, ReadingType},
     words::Word,
 };

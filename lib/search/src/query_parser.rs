@@ -1,11 +1,13 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, str::FromStr};
 
 use itertools::Itertools;
 use localization::{language::Language, traits::Translatable, TranslationDict};
 use serde::Deserialize;
 
 use japanese::JapaneseExt;
-use resources::{models::kanji, parse::jmdict::part_of_speech::PosSimple};
+use types::jotoba::{
+    kanji, languages::Language as ContentLanguage, words::part_of_speech::PosSimple,
+};
 
 use super::query::{Form, Query, QueryLang, SearchTypeTag, Tag, UserSettings};
 
@@ -20,6 +22,7 @@ pub struct QueryParser {
     page: usize,
     word_index: usize,
     use_original: bool,
+    language_override: Option<ContentLanguage>,
 }
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Hash)]
@@ -87,8 +90,10 @@ impl QueryParser {
         word_index: usize,
         trim: bool,
     ) -> QueryParser {
+        let (query_stripped, language_override) = strip_lang_override(&query);
+
         // Split query into the actual query and possibly available tags
-        let (parsed_query, tags) = Self::partition_tags_query(&query, trim);
+        let (parsed_query, tags) = Self::partition_tags_query(&query_stripped, trim);
         let mut parsed_query: String = Self::format_query(parsed_query, trim)
             .chars()
             .into_iter()
@@ -121,6 +126,7 @@ impl QueryParser {
             page,
             word_index,
             use_original,
+            language_override,
         }
     }
 
@@ -167,6 +173,7 @@ impl QueryParser {
             word_index: self.word_index,
             parse_japanese,
             use_original: self.use_original,
+            language_override: self.language_override,
         })
     }
 
@@ -263,6 +270,30 @@ impl QueryParser {
     }
 }
 
+/// if query starts with a language override keyword, strip it off and return the actual query
+/// along with the language parsed.
+fn strip_lang_override(query: &str) -> (&str, Option<ContentLanguage>) {
+    let split_pos = query.find(':');
+    if split_pos.is_none() || *split_pos.as_ref().unwrap() > 3 || query.len() < 5 {
+        return (query, None);
+    }
+
+    let split_pos = split_pos.unwrap();
+
+    let lang_str = &query[..split_pos].trim();
+
+    let lang = match ContentLanguage::from_str(lang_str) {
+        Ok(lang) => lang,
+        Err(_) => {
+            return (query, None);
+        }
+    };
+
+    let new_query = query[split_pos + 1..].trim();
+
+    (new_query, Some(lang))
+}
+
 /// Returns a number 0-100 of japanese character ratio
 fn get_jp_part(inp: &str) -> u8 {
     let mut total = 0;
@@ -298,4 +329,30 @@ pub fn format_kanji_reading(s: &str) -> String {
 
 pub fn calc_page_offset(page: usize, page_size: usize) -> usize {
     page.saturating_sub(1) * page_size
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lang_override_split() {
+        let query = "eng: dog";
+        let (new_query, language) = strip_lang_override(query);
+        assert_eq!(new_query, "dog");
+        assert_eq!(language, Some(ContentLanguage::English));
+    }
+
+    #[test]
+    fn test_lang_override_split_invalid() {
+        let query = "eng:";
+        let (new_query, language) = strip_lang_override(query);
+        assert_eq!(new_query, "eng:");
+        assert_eq!(language, None);
+
+        let query = "egn:";
+        let (new_query, language) = strip_lang_override(query);
+        assert_eq!(new_query, "egn:");
+        assert_eq!(language, None);
+    }
 }

@@ -8,10 +8,14 @@ use crate::query_parser;
 use super::query_parser::QueryType;
 
 use itertools::Itertools;
-use resources::{
-    models::kanji,
-    parse::jmdict::{languages::Language, misc::Misc, part_of_speech::PosSimple},
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
+use types::jotoba::{
+    kanji,
+    languages::Language,
+    words::{misc::Misc, part_of_speech::PosSimple},
 };
+
+const QUERY_ENCODE_SET: &AsciiSet = &CONTROLS.add(b'/');
 
 /// A single user provided query in a parsed format
 #[derive(Debug, Clone, PartialEq, Default, Hash)]
@@ -27,6 +31,7 @@ pub struct Query {
     pub page: usize,
     pub word_index: usize,
     pub parse_japanese: bool,
+    pub language_override: Option<Language>,
     /// Whether to use the user query only or modify it if necessary
     pub use_original: bool,
 }
@@ -86,6 +91,7 @@ pub enum Tag {
     Jlpt(u8),
     GenkiLesson(u8),
     Hidden,
+    IrregularIruEru,
 }
 
 /// Hashtag based search tags
@@ -162,9 +168,12 @@ impl Default for QueryLang {
 impl Tag {
     /// Parse a tag from a string
     pub fn parse_from_str(s: &str) -> Option<Tag> {
-        if let Some(tag) = s.strip_prefix("#") {
+        if let Some(tag) = s.to_lowercase().strip_prefix("#") {
             match tag {
                 "hidden" | "hide" => return Some(Tag::Hidden),
+                "irrichidan" | "irregularichidan" | "irregular-ichidan" => {
+                    return Some(Tag::IrregularIruEru)
+                }
                 _ => (),
             }
         }
@@ -220,7 +229,7 @@ impl Tag {
     /// Returns true if the tag is allowed to be used without a query
     #[inline]
     pub fn is_empty_allowed(&self) -> bool {
-        self.is_jlpt() || self.is_genki_lesson()
+        self.is_jlpt() || self.is_genki_lesson() || self.is_irregular_iru_eru()
     }
 
     /// Returns `true` if the tag is [`SearchType`].
@@ -301,6 +310,13 @@ impl Tag {
             None
         }
     }
+
+    /// Returns `true` if the tag is [`IrregularIruEru`].
+    ///
+    /// [`IrregularIruEru`]: Tag::IrregularIruEru
+    pub fn is_irregular_iru_eru(&self) -> bool {
+        matches!(self, Self::IrregularIruEru)
+    }
 }
 
 impl Query {
@@ -364,6 +380,16 @@ impl Query {
                 (is_tag && !is_search_type_tag) || !is_tag
             })
             .join(" ")
+    }
+
+    /// Encodes the query using percent encoding
+    pub fn get_query_encoded(&self) -> String {
+        utf8_percent_encode(&self.query, QUERY_ENCODE_SET).to_string()
+    }
+
+    /// Returns the language with lang override applied
+    pub fn get_lang_with_override(&self) -> Language {
+        self.language_override.unwrap_or(self.settings.user_lang)
     }
 }
 

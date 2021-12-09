@@ -1,0 +1,29 @@
+[package]
+name = "types"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+strum = { version = "0.23.0", features = ["derive"] }
+strum_macros = "0.23.1"
+serde = { version = "1.0.130", features = ["derive"] }
+jp_inflections = { git = "https://github.com/JojiiOfficial/Japanese_Inflections"}
+bitflags = {git = "https://github.com/JojiiOfficial/BitFlags"}
+localization = { path = "../localization", optional = true}
+japanese = { path = "../japanese", optional = true}
+itertools = "0.10.1"
+### Note: This sub-crate is not allowed to have dependencies to other Jotoba crates, unless its only used if `jotoba_intern` is enabled.
+
+[features]
+# This feature adds stuff required for Jotoba to work but not necessarily for extern crates, so its made optional
+jotoba_intern = ["localization", "japanese" ]
+
+# Contains raw types of JMdict, KanjiDict, ... which are only required to parse but not directly used by Jotoba
+raw_types = []
+
+# Contains API types, and can be used as rust wrapper around the Jotoba API
+api = []
+
+default = []

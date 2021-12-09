@@ -1,10 +1,10 @@
+#[cfg(feature = "jotoba_intern")]
 use localization::traits::Translatable;
-use std::convert::TryFrom;
-use strum_macros::{AsRefStr, Display, EnumString};
 
-use crate::parse::error;
+use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
+use strum_macros::{AsRefStr, Display, EnumString};
 
 #[derive(
     Debug, Display, PartialEq, Eq, Clone, Copy, AsRefStr, EnumString, Hash, Deserialize, Serialize,
@@ -33,6 +33,39 @@ pub enum Language {
     Japanese,
 }
 
+impl Language {
+    /// Returns an iterator over all Languages which have words with this language
+    pub fn word_iter() -> impl Iterator<Item = Self> {
+        [
+            Language::English,
+            Language::German,
+            Language::Russian,
+            Language::Spanish,
+            Language::Swedish,
+            Language::French,
+            Language::Dutch,
+            Language::Hungarian,
+            Language::Slovenian,
+        ]
+        .into_iter()
+    }
+
+    pub fn to_query_format(&self) -> &'static str {
+        match *self {
+            Language::English => "eng",
+            Language::German => "ger",
+            Language::Russian => "rus",
+            Language::Spanish => "spa",
+            Language::Swedish => "swe",
+            Language::French => "fre",
+            Language::Dutch => "dut",
+            Language::Hungarian => "hun",
+            Language::Slovenian => "slv",
+            Language::Japanese => "jpn",
+        }
+    }
+}
+
 impl Default for Language {
     #[inline]
     fn default() -> Self {
@@ -41,7 +74,7 @@ impl Default for Language {
 }
 
 impl TryFrom<i32> for Language {
-    type Error = error::Error;
+    type Error = ();
     #[inline]
     fn try_from(i: i32) -> Result<Self, Self::Error> {
         Ok(match i {
@@ -55,7 +88,7 @@ impl TryFrom<i32> for Language {
             7 => Self::Hungarian,
             8 => Self::Slovenian,
             9 => Self::Japanese,
-            _ => return Err(error::Error::ParseError),
+            _ => return Err(()),
         })
     }
 }
@@ -78,6 +111,7 @@ impl Into<i32> for Language {
     }
 }
 
+#[cfg(feature = "jotoba_intern")]
 impl Translatable for Language {
     #[inline]
     fn get_id(&self) -> &'static str {

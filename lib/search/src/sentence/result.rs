@@ -1,5 +1,5 @@
 use japanese::{furigana, furigana::SentencePartRef};
-use resources::parse::jmdict::languages::Language;
+use types::jotoba::languages::Language;
 
 #[derive(PartialEq, Clone, Default)]
 pub struct SentenceResult {
@@ -39,7 +39,7 @@ impl Sentence {
 
     #[inline]
     pub fn from_m_sentence(
-        s: resources::models::sentences::Sentence,
+        s: types::jotoba::sentences::Sentence,
         language: Language,
         allow_english: bool,
     ) -> Option<Self> {

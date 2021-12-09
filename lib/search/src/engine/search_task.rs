@@ -7,8 +7,9 @@ use super::{
 use crate::engine::DocumentGenerateable;
 use error::Error;
 use itertools::Itertools;
-use resources::{models::storage::ResourceStorage, parse::jmdict::languages::Language};
+use resources::models::storage::ResourceStorage;
 use std::{collections::BinaryHeap, marker::PhantomData};
+use types::jotoba::languages::Language;
 use vector_space_model::DocumentVector;
 
 pub struct SearchTask<'a, T>
@@ -187,7 +188,7 @@ where
     pub fn find(&self) -> Result<SearchResult<&'static T::Output>, Error> {
         let items = self
             .get_queries()
-            .map(|(q_str, vec, lang)| self.find_by_vec(vec, q_str, lang))
+            .map(|(q_str, vec, lang)| self.find_by_vec(vec, &q_str, lang))
             .collect::<Result<Vec<_>, Error>>()?
             .into_iter()
             .flatten()
@@ -205,21 +206,12 @@ where
     /// Returns an iterator over all queries in form of document vectors and its assigned language
     fn get_queries<'b>(
         &'b self,
-    ) -> impl Iterator<Item = (&'b str, DocumentVector<T::GenDoc>, Option<Language>)> {
+    ) -> impl Iterator<Item = (String, DocumentVector<T::GenDoc>, Option<Language>)> + 'b {
         self.queries.iter().filter_map(move |(q_str, lang)| {
             let index = T::get_index(*lang).expect("Lang not loaded");
-
-            let align = self.allow_align && !self.has_term();
-
-            // align query
-            let aligned_query = align
-                .then(|| T::align_query(q_str, index, *lang))
-                .flatten()
-                .unwrap_or(q_str);
-
-            let vec = T::gen_query_vector(index, aligned_query)?;
-
-            Some((aligned_query, vec, *lang))
+            let allow_align = self.allow_align && !self.has_term();
+            let (vec, aligned) = T::gen_query_vector(index, q_str, allow_align, *lang)?;
+            Some((aligned, vec, *lang))
         })
     }
 

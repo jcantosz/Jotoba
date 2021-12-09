@@ -2,11 +2,6 @@
 * This JS-File everything related to the settings overlay
 */
 
-// Cookies that track the user
-const trackingCookies = [
-    "allow_cookies"
-];
-
 // Analytics. Use your own or leave empty
 var analyticsUrl = '';
 var analyticsAttributes = null;
@@ -30,7 +25,6 @@ function revokeCookieAgreement(manuallyCalled) {
     if (manuallyCalled)
         Util.showMessage("success", "Successfully deleted your cookie data.");
 
-    Util.deleteSelectedCookies(trackingCookies);
     Cookies.set("allow_cookies", "0", {path: '/'});
     Util.setMdlCheckboxState("cookie_settings", false);
 }
@@ -56,6 +50,7 @@ function loadCookieData() {
     let example_sentences = Util.toBoolean(Cookies.get("show_sentences"));
     let sentence_furigana = Util.toBoolean(Cookies.get("sentence_furigana"));
     let focus_searchbar = Util.toBoolean(Cookies.get("focus_searchbar"));
+    let select_searchbar_content = Util.toBoolean(Cookies.get("select_searchbar_content"));
     let items_per_page = Cookies.get("items_per_page");
     let kanji_per_page = Cookies.get("kanji_page_size");
 
@@ -68,12 +63,12 @@ function loadCookieData() {
 
     // Set essentials
     if (Cookies.get("default_lang") === undefined) {
-        Cookies.set("default_lang", search_lang);
+        Cookies.set("default_lang", search_lang, {path: '/'});
     }
 
     // Execute 
     setLanguageSettings(search_lang, page_lang);
-    setSearchSettings(english_always, english_on_top, example_sentences, sentence_furigana, focus_searchbar, items_per_page, kanji_per_page);
+    setSearchSettings(english_always, english_on_top, example_sentences, sentence_furigana, focus_searchbar, select_searchbar_content, items_per_page, kanji_per_page);
     setDisplaySettings(theme, kanji_speed);
     setOtherSettings(cookies_allowed);
 
@@ -107,24 +102,32 @@ async function setLanguageSettings(search_lang, page_lang) {
 }
 
 // Prepare the search tab
-async function setSearchSettings(english_always, english_on_top, example_sentences, sentence_furigana, focus_searchbar, items_per_page, kanji_per_page) {
+async function setSearchSettings(english_always, english_on_top, example_sentences, sentence_furigana, focus_searchbar, select_searchbar_content, items_per_page, kanji_per_page) {
     // Set checkboxes
     Util.setMdlCheckboxState("show_eng_settings", english_always);
     Util.setMdlCheckboxState("show_eng_on_top_settings", english_on_top);
     Util.setMdlCheckboxState("show_example_sentences_settings", example_sentences);
     Util.setMdlCheckboxState("show_sentence_furigana_settings", sentence_furigana);
     Util.setMdlCheckboxState("focus_search_bar_settings", focus_searchbar);
+    Util.setMdlCheckboxState("select_searchbar_content_settings", select_searchbar_content);
 
-    // Hide english_on_top if not english_always
+    // Hide sub entries if not parent is set to false
     if (!english_always) {
         $('#eng_on_top_parent').addClass("hidden");
     } else {
         $('#eng_on_top_parent').removeClass("hidden");
     }
 
+    // Hide sub entries if not parent is set to false
+    if (!focus_searchbar) {
+        $('#select_searchbar_content_parent').addClass("hidden");
+    } else {
+        $('#select_searchbar_content_parent').removeClass("hidden");
+    }
+
     // Default items val
     if (!items_per_page) {
-        Cookies.set("items_per_page", 10);
+        Cookies.set("items_per_page", 10, {path: '/'});
         items_per_page = 10;
     }
 
@@ -176,7 +179,7 @@ function onInputSettingsChange(relatedCookie, event) {
     let value = event.target.value;
 
     if (value > 0 && value < 101) {
-        Cookies.set(relatedCookie, event.target.value);
+        Cookies.set(relatedCookie, event.target.value, {path: '/'});
     } else {
         event.target.value = Cookies.get(relatedCookie);
         $(event.target).parent().addClass("is-dirty");
@@ -185,7 +188,7 @@ function onInputSettingsChange(relatedCookie, event) {
 
 // Handles an event caused by a settings-btn
 function onBtnSettingsChange(relatedCookie, event) {
-    Cookies.set(relatedCookie, event.target.checked);
+    Cookies.set(relatedCookie, event.target.checked, {path: '/'});
 }
 
 // Special handling for english_always
@@ -198,6 +201,18 @@ function onBtnSettingsChange_englishAlways(event) {
     }
 
     onBtnSettingsChange("show_english", event);
+}
+
+// Special handling for focus_search_bar
+function onBtnSettingsChange_focusSearchBar(event) {
+    // Hide english_on_top if not english_always
+    if (!event.target.checked) {
+        $('#select_searchbar_content_parent').addClass("hidden");
+    } else {
+        $('#select_searchbar_content_parent').removeClass("hidden");
+    }
+
+    onBtnSettingsChange("focus_searchbar", event);
 }
 
 // Special handling for use_darkmode

@@ -11,7 +11,7 @@ use crate::{
     query::{Form, QueryLang, Tag},
 };
 use error::Error;
-use resources::{models::sentences::Sentence, parse::jmdict::languages::Language};
+use types::jotoba::{languages::Language, sentences::Sentence};
 
 /// Searches for sentences
 pub fn search(query: &Query) -> Result<SentenceResult, Error> {
@@ -66,7 +66,7 @@ fn jp_search(query: &Query) -> SearchTask<native::Engine> {
     search_task
 }
 
-fn sort_fn<T: SearchEngine<Output = Sentence>>(
+fn sort_fn<T: SearchEngine<Output = Sentence> + Send>(
     query: &Query,
     search_task: &mut SearchTask<T>,
     japanese: bool,
@@ -88,7 +88,10 @@ fn sort_fn<T: SearchEngine<Output = Sentence>>(
 }
 
 /// Sets a SearchTasks language filter
-fn lang_filter<T: SearchEngine<Output = Sentence>>(query: &Query, search_task: &mut SearchTask<T>) {
+fn lang_filter<T: SearchEngine<Output = Sentence> + Send>(
+    query: &Query,
+    search_task: &mut SearchTask<T>,
+) {
     let lang = query.settings.user_lang;
     let show_english = query.settings.show_english;
 
@@ -98,7 +101,7 @@ fn lang_filter<T: SearchEngine<Output = Sentence>>(query: &Query, search_task: &
     })
 }
 
-fn get_result<T: SearchEngine<Output = Sentence>>(
+fn get_result<T: SearchEngine<Output = Sentence> + Send>(
     search: SearchTask<T>,
     query: &Query,
 ) -> Result<SentenceResult, Error> {

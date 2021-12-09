@@ -1,4 +1,6 @@
+#[cfg(feature = "jotoba_intern")]
 use localization::traits::Translatable;
+
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumString;
 
@@ -64,6 +66,7 @@ impl NameType {
     }
 }
 
+#[cfg(feature = "jotoba_intern")]
 impl Translatable for NameType {
     #[inline]
     fn get_id(&self) -> &'static str {

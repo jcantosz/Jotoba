@@ -1,11 +1,9 @@
 use std::{fs::read_to_string, vec};
 
-use resources::{
-    models::{
-        kanji::Kanji,
-        words::{filter_languages, Word},
-    },
-    parse::jmdict::languages::Language,
+use types::jotoba::{
+    kanji::Kanji,
+    languages::Language,
+    words::{filter_languages, Word},
 };
 
 #[derive(Debug, PartialEq, Clone)]

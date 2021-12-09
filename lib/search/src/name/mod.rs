@@ -16,7 +16,7 @@ use super::query::Query;
 use error::Error;
 
 use japanese::JapaneseExt;
-use resources::models::names::Name;
+use types::jotoba::names::Name;
 use utils::to_option;
 
 /// Search for names
@@ -47,7 +47,9 @@ fn foreign_search(query: &Query) -> SearchTask<foreign::Engine> {
         .limit(query.settings.page_size as usize)
 }
 
-fn handle_search<T: SearchEngine<Output = Name>>(task: SearchTask<T>) -> Result<NameResult, Error> {
+fn handle_search<T: SearchEngine<Output = Name> + Send>(
+    task: SearchTask<T>,
+) -> Result<NameResult, Error> {
     Ok(NameResult::from(task.find()?))
 }
 

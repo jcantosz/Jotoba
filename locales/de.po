@@ -13,7 +13,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"PO-Revision-Date: 2021-11-27 16:31+0100\n"
+"PO-Revision-Date: 2021-11-29 21:46+0100\n"
 "Last-Translator:  <>\n"
 "Language-Team: English\n"
 "Language: en\n"
@@ -418,6 +418,9 @@ msgstr "Zeige englische Ergebnisse als erstes"
 msgid "Focus search bar on load"
 msgstr "Fokussiere die Suchleiste nach dem Suchen"
 
+msgid "Select input on load"
+msgstr "Markiere den Input nach dem Suchen"
+
 msgid "Results per page"
 msgstr "Ergebnisse pro Seite"
 
@@ -627,6 +630,9 @@ msgstr "Suche nach Suffixen"
 msgid "Search for japanese particles"
 msgstr "Suche nach Japanischen Partikeln [z.B. を]"
 
+msgid "Lists iru/eru ending verbs which are conjugated as godan verbs"
+msgstr "Zeige iru/eru endende Verben, die als Godan verb konjugiert werden"
+
 msgid "Search for sfx words [comic sounds]"
 msgstr "Suche nach sfx-Wörtern [z.b. Sounds in Comics]"
 
@@ -754,6 +760,9 @@ msgstr "Wörter und Kanjis"
 
 msgid "{} could be an inflection of"
 msgstr "{} könnte eine Flexion sein von"
+
+msgid "Temporarily switched language to {}"
+msgstr "Vorübergehend zu {} gewechselt"
 
 msgctxt "inflection"
 msgid "Negative"

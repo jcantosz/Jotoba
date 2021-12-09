@@ -1,7 +1,8 @@
+#[cfg(feature = "jotoba_intern")]
 use localization::{language::Language, traits::Translatable, TranslationDict};
-use strum_macros::{AsRefStr, EnumString};
 
 use serde::{Deserialize, Serialize};
+use strum_macros::{AsRefStr, EnumString};
 
 #[derive(Debug, PartialEq, Clone, Copy, AsRefStr, EnumString, Serialize, Deserialize, Hash)]
 #[repr(u8)]
@@ -152,6 +153,7 @@ pub enum Field {
     Zoology,
 }
 
+#[cfg(feature = "jotoba_intern")]
 impl Translatable for Field {
     fn get_id(&self) -> &'static str {
         match self {

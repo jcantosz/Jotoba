@@ -13,7 +13,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"PO-Revision-Date: 2021-11-27 16:31+0100\n"
+"PO-Revision-Date: 2021-11-29 21:47+0100\n"
 "Last-Translator:  <jojii@gmx.net>\n"
 "Language-Team: English\n"
 "Language: en\n"
@@ -418,6 +418,9 @@ msgstr ""
 msgid "Focus search bar on load"
 msgstr ""
 
+msgid "Select input on load"
+msgstr ""
+
 msgid "Results per page"
 msgstr ""
 
@@ -629,6 +632,9 @@ msgstr ""
 msgid "Search for japanese particles"
 msgstr ""
 
+msgid "Lists iru/eru ending verbs which are conjugated as godan verbs"
+msgstr ""
+
 msgid "Search for sfx words [comic sounds]"
 msgstr ""
 
@@ -755,6 +761,9 @@ msgid "Words and kanji"
 msgstr ""
 
 msgid "{} could be an inflection of"
+msgstr ""
+
+msgid "Temporarily switched language to {}"
 msgstr ""
 
 msgctxt "inflection"

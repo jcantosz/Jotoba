@@ -1,7 +1,8 @@
+#[cfg(feature = "jotoba_intern")]
 use localization::traits::Translatable;
-use strum_macros::{AsRefStr, EnumString};
 
 use serde::{Deserialize, Serialize};
+use strum_macros::{AsRefStr, EnumString};
 
 #[derive(Debug, PartialEq, Clone, Copy, AsRefStr, EnumString, Serialize, Deserialize, Hash)]
 #[repr(u8)]
@@ -122,6 +123,7 @@ pub enum ForeignLanguage {
     French,
 }
 
+#[cfg(feature = "jotoba_intern")]
 impl Translatable for ForeignLanguage {
     fn get_id(&self) -> &'static str {
         match self {
@@ -187,6 +189,7 @@ impl Translatable for ForeignLanguage {
 }
 
 impl Default for ForeignLanguage {
+    #[inline]
     fn default() -> Self {
         Self::English
     }

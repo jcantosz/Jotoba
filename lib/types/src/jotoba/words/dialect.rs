@@ -1,9 +1,10 @@
 use std::fmt::Display;
 
+#[cfg(feature = "jotoba_intern")]
 use localization::{language::Language, traits::Translatable, TranslationDict};
-use strum_macros::EnumString;
 
 use serde::{Deserialize, Serialize};
+use strum_macros::EnumString;
 
 #[derive(Debug, PartialEq, Clone, Copy, EnumString, Serialize, Deserialize, Hash)]
 #[repr(u8)]
@@ -61,6 +62,7 @@ impl Into<&'static str> for Dialect {
     }
 }
 
+#[cfg(feature = "jotoba_intern")]
 impl Translatable for Dialect {
     #[inline]
     fn get_id(&self) -> &'static str {

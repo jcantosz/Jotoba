@@ -1,10 +1,5 @@
-pub mod accents;
-pub mod kanji;
-pub mod names;
-pub mod sentences;
 pub mod storage;
 pub mod suggestions;
-pub mod words;
 
 use std::{
     collections::HashMap,
@@ -14,13 +9,13 @@ use std::{
     path::Path,
 };
 
-use self::{
+use self::storage::{RadicalStorage, ResourceStorage, SentenceStorage};
+use serde::{Deserialize, Serialize};
+use types::jotoba::{
     kanji::{DetailedRadical, Kanji},
     names::Name,
-    storage::{RadicalStorage, ResourceStorage, SentenceStorage},
     words::Word,
 };
-use serde::{Deserialize, Serialize};
 
 /// Static git hash of current build
 pub const GIT_HASH: &str = env!("GIT_HASH");
@@ -30,6 +25,7 @@ pub struct DictResources {
     // words
     pub words: Vec<Word>,
     pub word_jlpt: HashMap<u8, Vec<u32>>,
+    pub irregular_iru_eru: Vec<u32>,
     // kanji
     pub kanji: Vec<Kanji>,
     pub kanji_genki: HashMap<u8, Vec<char>>,

@@ -3,9 +3,9 @@ use japanese::JapaneseExt;
 use levenshtein::levenshtein;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use resources::{
-    models::{kanji, words::Word},
-    parse::jmdict::languages::Language,
+use types::jotoba::{
+    languages::Language,
+    words::{sense::Gloss, Word},
 };
 
 /// A Regex matching parentheses and its contents
@@ -69,7 +69,63 @@ pub fn foreign_search_order(
     word: &Word,
     relevance: f32,
     query_str: &str,
-    language: Language,
+    query_lang: Language,
+    user_lang: Language,
+) -> usize {
+    let mut score = relevance as f64 * 10.0;
+
+    let found = match find_reading(word, query_str, user_lang, query_lang) {
+        Some(v) => v,
+        None => {
+            return score as usize;
+        }
+    };
+
+    // Each gloss considered in a frequency analysis has been normalized to 1. Thus we require it
+    // to be 1 or more. Otherwise run the fall-back scoring method
+    if found.gloss_full.occurrence >= 1 {
+        // found.sense.language == language &&
+        score += found.gloss_full.occurrence as f64;
+    } else {
+        return foreign_search_fall_back(word, relevance, query_str, query_lang, user_lang);
+    }
+
+    let mut divisor = match (found.mode, found.case_ignored) {
+        (SearchMode::Exact, false) => 130,
+        (SearchMode::Exact, true) => 130,
+        (_, false) => 10,
+        (_, true) => 8,
+    };
+
+    // Result found within users specified language
+    if query_lang != user_lang {
+        //score += 1000.0;
+        divisor /= 20
+    } else {
+        divisor *= 2;
+    }
+
+    score *= divisor as f64;
+
+    if word.is_common() {
+        score += 10.0;
+    }
+
+    if found.in_parentheses {
+        score -= 10f64.min(score);
+        //score = score.saturating_sub(10.0);
+    } else {
+        score += 30.0;
+    }
+
+    score as usize
+}
+
+pub fn foreign_search_fall_back(
+    word: &Word,
+    relevance: f32,
+    query_str: &str,
+    query_lang: Language,
     user_lang: Language,
 ) -> usize {
     let mut score: usize = (relevance * 20f32) as usize;
@@ -82,18 +138,12 @@ pub fn foreign_search_order(
         score += (word.jlpt_lvl.unwrap() * 2) as usize;
     }
 
-    /*
-    if !word.is_katakana_word() {
-        score += 4;
-    }
-    */
-
     // Result found within users specified language
-    if language == user_lang {
+    if query_lang == user_lang {
         score += 12;
     }
 
-    let found = match find_reading(word, query_str) {
+    let found = match find_reading(word, query_str, user_lang, query_lang) {
         Some(v) => v,
         None => {
             return score;
@@ -120,13 +170,13 @@ pub fn foreign_search_order(
 
 pub(super) fn kanji_reading_search(
     word: &Word,
-    kanji_reading: &resources::models::kanji::Reading,
+    kanji_reading: &types::jotoba::kanji::Reading,
     relevance: f32,
 ) -> usize {
     let mut score: usize = (relevance * 25f32) as usize;
 
     // This function should only be called for kanji reading search queries!
-    let formatted_reading = kanji::format_reading(&kanji_reading.reading);
+    let formatted_reading = types::jotoba::kanji::format_reading(&kanji_reading.reading);
     let kana_reading = &word.reading.kana.reading;
 
     if formatted_reading.is_hiragana() {
@@ -183,7 +233,14 @@ pub fn get_query_pos_in_gloss(
     ign_case: bool,
 ) -> Option<usize> {
     for lang_senes in this.get_senses() {
-        let res = find_in_senses(&lang_senes, query_str, s_mode, ign_case);
+        let res = find_in_senses(
+            &lang_senes,
+            query_str,
+            s_mode,
+            ign_case,
+            Language::English,
+            Language::English,
+        );
         if let Some(res) = res {
             return Some(res.pos);
         }
@@ -196,18 +253,31 @@ pub fn get_query_pos_in_gloss(
 struct FindResult {
     mode: SearchMode,
     case_ignored: bool,
-    language: resources::parse::jmdict::languages::Language,
+    language: types::jotoba::languages::Language,
     pos: usize,
     gloss: String,
     in_parentheses: bool,
-    sense: resources::models::words::Sense,
+    sense: types::jotoba::words::sense::Sense,
     sense_pos: usize,
+    gloss_full: Gloss,
 }
 
-fn find_reading(word: &Word, query: &str) -> Option<FindResult> {
+fn find_reading(
+    word: &Word,
+    query: &str,
+    user_lang: Language,
+    expected_lang: Language,
+) -> Option<FindResult> {
     for mode in SearchMode::ordered_iter() {
         for ign_case in &[false, true] {
-            let res = find_in_senses(&word.senses, query, *mode, *ign_case);
+            let res = find_in_senses(
+                &word.senses,
+                query,
+                *mode,
+                *ign_case,
+                user_lang,
+                expected_lang,
+            );
             if res.is_some() {
                 return res;
             }
@@ -218,12 +288,18 @@ fn find_reading(word: &Word, query: &str) -> Option<FindResult> {
 }
 
 fn find_in_senses(
-    senses: &[resources::models::words::Sense],
+    senses: &[types::jotoba::words::sense::Sense],
     query_str: &str,
     mode: SearchMode,
     ign_case: bool,
+    user_lang: Language,
+    expected_lang: Language,
 ) -> Option<FindResult> {
+    let mut res: Option<FindResult> = None;
     for (pos, sense) in senses.iter().enumerate() {
+        if sense.language != expected_lang && sense.language != user_lang {
+            continue;
+        }
         let mut found = try_find_in_sense(&sense, query_str, mode, ign_case, true);
         let in_parentheses = found.is_none();
 
@@ -234,30 +310,40 @@ fn find_in_senses(
             }
         }
 
-        let (sense_pos, gloss) = found.unwrap();
+        let (sense_pos, gloss_str, gloss) = found.unwrap();
+        let curr_occurrence = gloss.occurrence;
 
-        return Some(FindResult {
+        let this_res = Some(FindResult {
             mode,
             pos,
             language: sense.language,
             case_ignored: ign_case,
-            gloss,
+            gloss: gloss_str,
             in_parentheses,
             sense: sense.clone(),
             sense_pos,
+            gloss_full: gloss,
         });
+
+        if let Some(ref curr_res) = res {
+            if curr_res.gloss_full.occurrence < curr_occurrence {
+                res = this_res;
+            }
+        } else {
+            res = this_res;
+        }
     }
 
-    None
+    res
 }
 
 fn try_find_in_sense(
-    sense: &resources::models::words::Sense,
+    sense: &types::jotoba::words::sense::Sense,
     query_str: &str,
     mode: SearchMode,
     ign_case: bool,
     ign_parentheses: bool,
-) -> Option<(usize, String)> {
+) -> Option<(usize, String, Gloss)> {
     sense.glosses.iter().enumerate().find_map(|(pos, g)| {
         let gloss = if ign_parentheses {
             let gloss = REMOVE_PARENTHESES.replace(&g.gloss, "");
@@ -266,6 +352,6 @@ fn try_find_in_sense(
             g.gloss.to_owned()
         };
         mode.str_eq(&gloss.as_str(), &query_str, ign_case)
-            .then(|| (pos, gloss.to_owned()))
+            .then(|| (pos, gloss.to_owned(), g.clone()))
     })
 }

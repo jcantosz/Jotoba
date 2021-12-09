@@ -1,7 +1,7 @@
 #![allow(clippy::from_over_into)]
 use std::convert::TryFrom;
 
-use crate::parse::error;
+#[cfg(feature = "jotoba_intern")]
 use localization::{language::Language, traits::Translatable, TranslationDict};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumString;
@@ -50,7 +50,7 @@ pub enum PosSimple {
 }
 
 impl TryFrom<i32> for PosSimple {
-    type Error = error::Error;
+    type Error = ();
     fn try_from(i: i32) -> Result<Self, Self::Error> {
         Ok(match i {
             0 => Self::Adverb,
@@ -71,7 +71,7 @@ impl TryFrom<i32> for PosSimple {
             16 => Self::Unclassified,
             17 => Self::Intransitive,
             18 => Self::Transitive,
-            _ => return Err(error::Error::ParseError),
+            _ => return Err(()),
         })
     }
 }
@@ -304,6 +304,7 @@ pub enum GodanVerbEnding {
     IkuYuku,
 }
 
+#[cfg(feature = "jotoba_intern")]
 impl Translatable for PartOfSpeech {
     fn get_id(&self) -> &'static str {
         match self {
@@ -337,6 +338,7 @@ impl Translatable for PartOfSpeech {
     }
 }
 
+#[cfg(feature = "jotoba_intern")]
 impl Translatable for AdjectiveType {
     fn get_id(&self) -> &'static str {
         match self {
@@ -354,6 +356,7 @@ impl Translatable for AdjectiveType {
     }
 }
 
+#[cfg(feature = "jotoba_intern")]
 impl Translatable for NounType {
     fn get_id(&self) -> &'static str {
         match self {
@@ -366,6 +369,7 @@ impl Translatable for NounType {
     }
 }
 
+#[cfg(feature = "jotoba_intern")]
 impl Translatable for VerbType {
     fn get_id(&self) -> &'static str {
         match *self {
@@ -389,6 +393,7 @@ impl Translatable for VerbType {
     }
 }
 
+#[cfg(feature = "jotoba_intern")]
 impl Translatable for IrregularVerb {
     fn get_id(&self) -> &'static str {
         match self {
@@ -443,18 +448,18 @@ impl Into<String> for VerbType {
 
 /// Implement TryFrom for VerbType
 impl TryFrom<&str> for VerbType {
-    type Error = error::Error;
+    type Error = ();
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         if value.len() < 2 || value[..1] != *"v" {
-            return Err(error::Error::Undefined);
+            return Err(());
         }
 
         Ok(match &value[1..2] {
             "1" => match value {
                 "v1" => VerbType::Ichidan,
                 "v1-s" => VerbType::IchidanKureru,
-                _ => return Err(error::Error::Undefined),
+                _ => return Err(()),
             },
             "2" => VerbType::Nidan(NidanVerb::try_from(value)?), // Nidan
             "4" => VerbType::Yodan(VerbEnding::try_from(&value[2..3])?), // Yodan
@@ -472,7 +477,7 @@ impl TryFrom<&str> for VerbType {
 }
 
 impl TryFrom<&str> for IrregularVerb {
-    type Error = error::Error;
+    type Error = ();
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(match value {
             "vn" => IrregularVerb::Nu,
@@ -481,7 +486,7 @@ impl TryFrom<&str> for IrregularVerb {
             "vs-i" => IrregularVerb::Suru,
             "vs-s" => IrregularVerb::SuruSpecial,
             "vs-c" => IrregularVerb::Su,
-            _ => return Err(error::Error::Undefined),
+            _ => return Err(()),
         })
     }
 }
@@ -526,7 +531,7 @@ impl Into<String> for GodanVerbEnding {
 
 /// Implement TryFrom for VerbEnding
 impl TryFrom<&str> for GodanVerbEnding {
-    type Error = error::Error;
+    type Error = ();
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(match value {
             "aru" => GodanVerbEnding::Aru,
@@ -544,7 +549,7 @@ impl TryFrom<&str> for GodanVerbEnding {
                 "s" => GodanVerbEnding::Su,
                 "t" => GodanVerbEnding::Tsu,
                 "u" => GodanVerbEnding::U,
-                _ => return Err(error::Error::Undefined),
+                _ => return Err(()),
             },
         })
     }
@@ -574,7 +579,7 @@ impl Into<String> for VerbEnding {
 
 /// Implement TryFrom for VerbEnding
 impl TryFrom<&str> for VerbEnding {
-    type Error = error::Error;
+    type Error = ();
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(match value {
             "b" => VerbEnding::Bu,
@@ -590,7 +595,7 @@ impl TryFrom<&str> for VerbEnding {
             "w" => VerbEnding::U,
             "y" => VerbEnding::Yu,
             "z" => VerbEnding::Zu,
-            _ => return Err(error::Error::Undefined),
+            _ => return Err(()),
         })
     }
 }
@@ -609,11 +614,11 @@ impl Into<String> for NidanVerb {
 
 /// Implement TryFrom for NidanVerb
 impl TryFrom<&str> for NidanVerb {
-    type Error = error::Error;
+    type Error = ();
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         if value.len() < 3 || value[..1] != *"v" {
-            return Err(error::Error::Undefined);
+            return Err(());
         }
 
         if value == "v2a-s" {
@@ -626,7 +631,7 @@ impl TryFrom<&str> for NidanVerb {
         let class: VerbClass = match &value[4..5] {
             "k" => VerbClass::Upper,
             "s" => VerbClass::Lower,
-            _ => return Err(error::Error::Undefined),
+            _ => return Err(()),
         };
 
         let ending = VerbEnding::try_from(&value[2..3])?;
@@ -651,7 +656,7 @@ impl Into<String> for NounType {
 
 /// Implement TryFrom for NounType
 impl TryFrom<&str> for NounType {
-    type Error = error::Error;
+    type Error = ();
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(match &value[2..] {
@@ -659,7 +664,7 @@ impl TryFrom<&str> for NounType {
             "pref" => NounType::Prefix,
             "suf" => NounType::Suffix,
             "t" => NounType::Temporal,
-            _ => return Err(error::Error::Undefined),
+            _ => return Err(()),
         })
     }
 }
@@ -684,7 +689,7 @@ impl Into<String> for AdjectiveType {
 
 /// Implement TryFrom for AdjectiveType
 impl TryFrom<&str> for AdjectiveType {
-    type Error = error::Error;
+    type Error = ();
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(match value[4..].as_ref() {
@@ -698,7 +703,7 @@ impl TryFrom<&str> for AdjectiveType {
             "pn" => AdjectiveType::PreNoun,
             "shiku" => AdjectiveType::Shiku,
             "t" => AdjectiveType::Taru,
-            _ => return Err(error::Error::Undefined),
+            _ => return Err(()),
         })
     }
 }
@@ -739,7 +744,7 @@ impl Into<String> for PartOfSpeech {
 
 /// Implement TryFrom for PartOfSpeech
 impl TryFrom<&str> for PartOfSpeech {
-    type Error = error::Error;
+    type Error = ();
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(match value {
@@ -773,198 +778,8 @@ impl TryFrom<&str> for PartOfSpeech {
                     return Ok(PartOfSpeech::Verb(VerbType::try_from(value)?));
                 }
 
-                return Err(error::Error::Undefined);
+                return Err(());
             }
         })
     }
 }
-
-// Part of speech tests
-#[cfg(test)]
-mod test {
-    use super::*;
-    use error::Error;
-    use std::convert::TryInto;
-
-    #[test]
-    fn test_adv() {
-        let pos: Result<PartOfSpeech, Error> = "adv".try_into();
-        assert!(pos.is_ok());
-        assert_eq!(pos.unwrap(), PartOfSpeech::Adverb);
-    }
-
-    #[test]
-    fn test_adj() {
-        let start_str = "adj-no";
-        let pos: Result<PartOfSpeech, Error> = start_str.try_into();
-        assert!(pos.is_ok());
-        let pos = pos.unwrap();
-        assert_eq!(pos, PartOfSpeech::Adjective(AdjectiveType::No));
-        let s: String = pos.into();
-        assert_eq!(start_str, s);
-    }
-}
-/*
-    #[test]
-    fn test_intransitive() {
-        let pos: Result<PartOfSpeech, Error> = "vi".try_into();
-        assert_eq!(pos, Ok(PartOfSpeech::Verb(VerbType::Intransitive)));
-    }
-
-    #[test]
-    fn test_irregular() {
-        let pos: Result<PartOfSpeech, Error> = "vr".try_into();
-        assert_eq!(
-            pos,
-            Ok(PartOfSpeech::Verb(VerbType::Irregular(IrregularVerb::Ru)))
-        );
-    }
-
-    #[test]
-    fn test_3_err() {
-        let pos: Result<PartOfSpeech, Error> = "ads".try_into();
-        assert_eq!(pos, Err(Error::Undefined));
-    }
-
-    #[test]
-    fn test_empty() {
-        let pos: Result<PartOfSpeech, Error> = "".try_into();
-        assert_eq!(pos, Err(Error::Undefined));
-    }
-
-    #[test]
-    fn test_adjective() {
-        let pos: Result<AdjectiveType, Error> = "adj-f".try_into();
-        assert_eq!(pos, Ok(AdjectiveType::PreNounVerb));
-    }
-
-    #[test]
-    fn test_adjective_fail() {
-        let pos: Result<AdjectiveType, Error> = "adjku".try_into();
-        assert_eq!(pos, Err(Error::Undefined));
-    }
-
-    #[test]
-    fn test_adjective_2() {
-        let pos: Result<AdjectiveType, Error> = "adj-shiku".try_into();
-        assert_eq!(pos, Ok(AdjectiveType::Shiku));
-    }
-
-    #[test]
-    fn test_noun() {
-        let pos: Result<NounType, Error> = "n-adv".try_into();
-        assert_eq!(pos, Ok(NounType::Adverbial));
-    }
-
-    #[test]
-    fn test_noun_fail() {
-        let pos: Result<NounType, Error> = "n-eeee".try_into();
-        assert_eq!(pos, Err(Error::Undefined));
-    }
-
-    #[test]
-    fn test_noun_2() {
-        let pos: Result<NounType, Error> = "n-suf".try_into();
-        assert_eq!(pos, Ok(NounType::Suffix));
-    }
-
-    #[test]
-    fn test_nidan() {
-        let pos: Result<NidanVerb, Error> = "v2b-k".try_into();
-        assert_eq!(
-            pos,
-            Ok(NidanVerb {
-                class: VerbClass::Upper,
-                ending: VerbEnding::Bu,
-            })
-        );
-    }
-
-    #[test]
-    fn test_yodan() {
-        let pos: Result<VerbType, Error> = "v4m".try_into();
-        assert_eq!(pos, Ok(VerbType::Yodan(VerbEnding::Mu)));
-    }
-
-    #[test]
-    fn test_godan_1() {
-        let pos: Result<VerbType, Error> = "v5b".try_into();
-        assert_eq!(pos, Ok(VerbType::Godan(GodanVerbEnding::Bu)));
-    }
-
-    #[test]
-    fn test_godan_2() {
-        let pos: Result<VerbType, Error> = "v5aru".try_into();
-        assert_eq!(pos, Ok(VerbType::Godan(GodanVerbEnding::Aru)));
-    }
-
-    #[test]
-    fn test_godan_3() {
-        let pos: Result<VerbType, Error> = "v5uru".try_into();
-        assert_eq!(pos, Ok(VerbType::Godan(GodanVerbEnding::Uru)));
-    }
-
-    #[test]
-    fn test_godan_4() {
-        let pos: Result<VerbType, Error> = "v5t".try_into();
-        assert_eq!(pos, Ok(VerbType::Godan(GodanVerbEnding::Tsu)));
-    }
-
-    #[test]
-    fn test_ru_irreg() {
-        let pos: Result<GodanVerbEnding, Error> = "r-i".try_into();
-        assert_eq!(pos, Ok(GodanVerbEnding::RuIrreg));
-    }
-
-    #[test]
-    fn test_godan_5() {
-        let pos: Result<VerbType, Error> = "v5u-s".try_into();
-        assert_eq!(pos, Ok(VerbType::Godan(GodanVerbEnding::USpecial)));
-    }
-
-    #[test]
-    fn test_consistency() {
-        let items = vec![
-            PartOfSpeech::Adverb,
-            PartOfSpeech::Verb(VerbType::Godan(GodanVerbEnding::RuIrreg)),
-            PartOfSpeech::Verb(VerbType::Godan(GodanVerbEnding::IkuYuku)),
-            PartOfSpeech::Verb(VerbType::Yodan(VerbEnding::Ku)),
-            PartOfSpeech::Verb(VerbType::Yodan(VerbEnding::Ru)),
-            PartOfSpeech::Verb(VerbType::Nidan(NidanVerb {
-                ending: VerbEnding::Nu,
-                class: VerbClass::Upper,
-            })),
-            PartOfSpeech::Verb(VerbType::Nidan(NidanVerb {
-                ending: VerbEnding::Mu,
-                class: VerbClass::Lower,
-            })),
-            PartOfSpeech::Verb(VerbType::Nidan(NidanVerb {
-                ending: VerbEnding::Ku,
-                class: VerbClass::Lower,
-            })),
-            PartOfSpeech::Verb(VerbType::Ichidan),
-            PartOfSpeech::Verb(VerbType::Irregular(IrregularVerb::NounOrAuxSuru)),
-            PartOfSpeech::Verb(VerbType::Irregular(IrregularVerb::Su)),
-            PartOfSpeech::Verb(VerbType::Irregular(IrregularVerb::Suru)),
-            PartOfSpeech::Verb(VerbType::Irregular(IrregularVerb::SuruSpecial)),
-            PartOfSpeech::Verb(VerbType::Unspecified),
-            PartOfSpeech::Noun(NounType::Normal),
-            PartOfSpeech::Noun(NounType::Adverbial),
-            PartOfSpeech::Noun(NounType::Temporal),
-            PartOfSpeech::Interjection,
-            PartOfSpeech::Conjungation,
-            PartOfSpeech::Unclassified,
-            PartOfSpeech::Counter,
-            PartOfSpeech::Particle,
-        ];
-
-        for item in items {
-            let to_str: String = item.clone().into();
-            println!("parsing: {:?} to_str: '{}'", item, to_str.as_str());
-            let back: Result<PartOfSpeech, Error> = to_str.as_str().try_into();
-            assert!(back.is_ok());
-            assert_eq!(back.unwrap(), item);
-        }
-    }
-}
-*/

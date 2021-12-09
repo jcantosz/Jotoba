@@ -22,14 +22,14 @@ fn search<'a>(main_lang: Language, query_str: &'a str) -> Vec<WordPair> {
     let mut res: Vec<_> = search_by_lang(main_lang, query_str, true)
         .map(|i| {
             let similarity =
-                (strsim::jaro(&i.text.to_lowercase(), &query_str.to_lowercase()) * 100f64) as u32;
+                (strsim::jaro(&i.text.to_lowercase(), &query_str.to_lowercase()) * 100f64) as i32;
             (i, main_lang, similarity)
         })
         .take(50)
         .chain(
             search_by_lang(main_lang, &query_str.to_lowercase(), true).filter_map(|i| {
                 let similarity = (strsim::jaro(&i.text.to_lowercase(), &query_str.to_lowercase())
-                    * 90f64) as u32;
+                    * 90f64) as i32;
                 Some((i, main_lang, similarity))
             }),
         )
@@ -38,7 +38,7 @@ fn search<'a>(main_lang: Language, query_str: &'a str) -> Vec<WordPair> {
                 |i| {
                     let similarity =
                         (strsim::jaro(&i.text.to_lowercase(), &query_str.to_lowercase()) * 90f64)
-                            as u32;
+                            as i32;
                     Some((i, main_lang, similarity))
                 },
             ),
@@ -51,7 +51,7 @@ fn search<'a>(main_lang: Language, query_str: &'a str) -> Vec<WordPair> {
                 .take(100)
                 .map(|i| {
                     let similarity =
-                        ((strsim::jaro(&i.text, query_str) * 100f64) as u32).saturating_sub(10);
+                        ((strsim::jaro(&i.text, query_str) * 100f64) as i32).saturating_sub(10);
                     (i, Language::English, similarity)
                 }),
         );
@@ -70,27 +70,39 @@ fn search<'a>(main_lang: Language, query_str: &'a str) -> Vec<WordPair> {
             }
 
             let hira_query = query.to_hiragana();
-            if let Some(hira_res) = super::native::suggest_words(&hira_query) {
+            if let Some(hira_res) = super::native::suggest_words(&[&hira_query]) {
                 hira_res.into_iter().for_each(|i| {
                     let exact_match = i.0.primary == hira_query;
 
                     let score = if exact_match {
-                        400u32
+                        400i32
                     } else {
-                        (((i.1 + 1) as f32 * 4f32).log2() + 65f32) as u32
+                        (((i.1 + 1) as f32 * 4f32).log2() + 65f32) as i32
                     };
+
                     res.push((
                         ForeignSuggestion {
                             secondary: i.0.secondary,
                             text: i.0.primary,
-                            sequence: 0,
-                            hash: eudex::Hash::new(""),
                             occurrences: i.1,
+                            ..ForeignSuggestion::default()
                         },
                         Language::Japanese,
                         score,
                     ));
                 });
+            }
+
+            if res.len() < 10 {
+                res.push((
+                    ForeignSuggestion {
+                        text: hira_query,
+                        ..ForeignSuggestion::default()
+                    },
+                    Language::Japanese,
+                    // show romaji on bottom
+                    -1,
+                ));
             }
         }
     }

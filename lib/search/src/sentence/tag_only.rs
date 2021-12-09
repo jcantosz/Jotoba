@@ -1,5 +1,5 @@
 use error::Error;
-use resources::parse::jmdict::languages::Language;
+use types::jotoba::languages::Language;
 
 use crate::query::{Query, Tag};
 
