@@ -4,15 +4,16 @@ include!(concat!(env!("OUT_DIR"), "/templates.rs"));
 mod actix_ructe;
 
 pub mod about;
-pub mod example_sentence;
+pub mod direct;
 pub mod help_page;
 pub mod index;
 pub mod news;
-mod pagination;
+pub mod og_tags;
 pub mod search_ep;
 pub mod search_help;
 mod session;
 pub mod templ_utils;
+pub mod unescaped;
 mod url_query;
 pub mod user_settings;
 pub mod web_error;
@@ -25,16 +26,14 @@ use localization::{
     traits::{Translatable, TranslatablePlural},
     TranslationDict,
 };
-use pagination::Pagination;
+use og_tags::TagKeyName;
 use resources::news::NewsEntry;
 use search::{query::Query, sentence::result::SentenceResult};
 
-use search::{
-    kanji::result::Item as KanjiItem, query::UserSettings, query_parser::QueryType,
-    word::result::WordResult,
-};
+use search::{kanji::result::Item as KanjiItem, query::UserSettings, word::result::WordResult};
 use search_help::SearchHelp;
-use types::jotoba::names::Name;
+use types::jotoba::{names::Name, pagination::Pagination, search::QueryType};
+use unescaped::{UnescapedStr, UnescapedString};
 
 /// Data for the base template
 pub struct BaseData<'a> {
@@ -44,6 +43,7 @@ pub struct BaseData<'a> {
     pub pagination: Option<Pagination>,
     pub asset_hash: &'a str,
     pub config: &'a Config,
+    pub og_tags: Option<og_tags::TagSet>,
 }
 
 /// The site to display
@@ -53,7 +53,7 @@ pub enum Site<'a> {
     Index,
     About,
     InfoPage,
-    News(Vec<&'static NewsEntry>),
+    News(Vec<NewsEntry>),
 }
 
 /// Search result data. Required by individual templates to render the result items
@@ -88,6 +88,7 @@ impl<'a> BaseData<'a> {
             pagination: None,
             asset_hash,
             config,
+            og_tags: None,
         }
     }
 
@@ -153,14 +154,14 @@ impl<'a> BaseData<'a> {
     pub fn get_search_site_name(&self) -> &str {
         if let Site::SearchResult(ref res) = self.site {
             return match res.result {
-                ResultData::Word(_) => self.gettext("Words"),
-                ResultData::KanjiInfo(_) => self.gettext("Kanji"),
-                ResultData::Sentence(_) => self.gettext("Sentences"),
-                ResultData::Name(_) => self.gettext("Names"),
+                ResultData::Word(_) => self.gettext("Words").as_str(),
+                ResultData::KanjiInfo(_) => self.gettext("Kanji").as_str(),
+                ResultData::Sentence(_) => self.gettext("Sentences").as_str(),
+                ResultData::Name(_) => self.gettext("Names").as_str(),
             };
         }
 
-        self.gettext("Words")
+        self.gettext("Words").as_str()
     }
 
     #[inline]
@@ -209,6 +210,19 @@ impl<'a> BaseData<'a> {
     pub fn kanji_copounds_collapsed(&self) -> bool {
         self.pagination.as_ref().map(|i| i.get_last()).unwrap_or(0) > 1
     }
+
+    /// Sets og tags which will overwrite the site-defaults if existing
+    pub fn set_og_tags(&mut self, tags: og_tags::TagSet) {
+        self.og_tags = Some(tags);
+    }
+
+    /// returns OG Tags
+    pub fn get_og_tags(&self) -> Option<og_tags::TagSet> {
+        if let Some(override_tags) = &self.og_tags {
+            return Some(override_tags.clone());
+        }
+        self.site.og_tags()
+    }
 }
 
 impl<'a> Site<'a> {
@@ -219,6 +233,14 @@ impl<'a> Site<'a> {
         } else {
             None
         }
+    }
+
+    /// Returns proper OG tags for the current site
+    pub fn og_tags(&self) -> Option<og_tags::TagSet> {
+        Some(match self {
+            Site::SearchResult(rs) => rs.og_tags(),
+            _ => default_og_tags(),
+        })
     }
 }
 
@@ -236,7 +258,24 @@ impl ResultData {
 }
 
 impl<'a> SearchResult<'a> {
-    pub(crate) fn og_tag_info(&self) -> String {
+    pub fn og_tags(&self) -> og_tags::TagSet {
+        let mut tags = og_tags::TagSet::with_capacity(5);
+
+        let search_type_name = self.search_type_ogg();
+        let query = &self.query.query;
+        let title = format!("Jotoba {search_type_name} search result for '{query}'");
+        let description = self.og_tag_description();
+
+        tags.add_og(TagKeyName::Title, &title);
+        tags.add_og(TagKeyName::Description, &description);
+        tags.add_twitter(TagKeyName::Title, &title);
+        tags.add_twitter(TagKeyName::Description, &description);
+        tags.add_twitter(TagKeyName::Card, "summary");
+
+        tags
+    }
+
+    pub(crate) fn og_tag_description(&self) -> String {
         format!("{} results. See more...", self.result_count())
     }
 
@@ -259,6 +298,20 @@ impl<'a> SearchResult<'a> {
     }
 }
 
+fn default_og_tags() -> og_tags::TagSet {
+    let mut tags = og_tags::TagSet::new();
+    let description =  "A powerful and free Japanese dictionary supporting words, kanji, sentences, and many different languages.";
+
+    tags.add_og(TagKeyName::Title, "Jotoba");
+    tags.add_og(TagKeyName::Description, description);
+    tags.add_og(TagKeyName::URL, "https://jotoba.de");
+
+    tags.add_twitter(TagKeyName::Title, "Jotoba");
+    tags.add_twitter(TagKeyName::Description, description);
+
+    tags
+}
+
 /// Translation helper
 impl<'a> BaseData<'a> {
     #[inline]
@@ -267,65 +320,125 @@ impl<'a> BaseData<'a> {
     }
 
     #[inline]
-    pub fn gettext<T: Translatable>(&self, t: T) -> &'a str {
-        t.gettext(&self.dict, Some(self.get_lang()))
+    pub fn gettext<T: Translatable>(&self, t: T) -> UnescapedStr<'a> {
+        t.gettext(&self.dict, Some(self.get_lang())).into()
     }
 
     #[inline]
-    pub fn gettext_custom<T: Translatable>(&self, t: T) -> String {
-        t.gettext_custom(&self.dict, Some(self.get_lang()))
+    pub fn gettext_custom<T: Translatable>(&self, t: T) -> UnescapedString {
+        t.gettext_custom(&self.dict, Some(self.get_lang())).into()
     }
 
     #[inline]
-    pub fn pgettext<T: Translatable>(&self, t: T, context: &'a str) -> &'a str {
+    pub fn pgettext<T: Translatable>(&self, t: T, context: &'a str) -> UnescapedStr<'a> {
         t.pgettext(&self.dict, context, Some(self.get_lang()))
+            .into()
     }
 
     #[inline]
-    pub fn ngettext<T: TranslatablePlural>(&self, t: T, n: u64) -> &'a str {
-        t.ngettext(&self.dict, n, Some(self.get_lang()))
+    pub fn ngettext<T: TranslatablePlural>(&self, t: T, n: u64) -> UnescapedStr<'a> {
+        t.ngettext(&self.dict, n, Some(self.get_lang())).into()
     }
 
     #[inline]
-    pub fn pngettext<T: TranslatablePlural>(&self, t: T, context: &'a str, n: u64) -> &'a str {
+    pub fn pngettext<T: TranslatablePlural>(
+        &self,
+        t: T,
+        context: &'a str,
+        n: u64,
+    ) -> UnescapedStr<'a> {
         t.npgettext(&self.dict, context, n, Some(self.get_lang()))
+            .into()
     }
 
     // Format functions
 
     #[inline]
-    pub fn gettext_fmt<T: Translatable, V: Display + Sized>(&self, t: T, values: &[V]) -> String {
+    pub fn gettext_fmt<T: Translatable, V: Display + Sized + Clone>(
+        &self,
+        t: T,
+        values: &[V],
+    ) -> UnescapedString {
         t.gettext_fmt(&self.dict, values, Some(self.get_lang()))
+            .into()
     }
 
     #[inline]
-    pub fn pgettext_fmt<T: Translatable, V: Display + Sized>(
+    pub fn pgettext_fmt<T: Translatable, V: Display + Sized + Clone>(
         &self,
         t: T,
         context: &'a str,
         values: &[V],
-    ) -> String {
+    ) -> UnescapedString {
         t.pgettext_fmt(&self.dict, context, values, Some(self.get_lang()))
+            .into()
     }
 
     #[inline]
-    pub fn ngettext_fmt<T: TranslatablePlural, V: Display + Sized>(
+    pub fn ngettext_fmt<T: TranslatablePlural, V: Display + Sized + Clone>(
         &self,
         t: T,
         n: u64,
         values: &[V],
-    ) -> String {
+    ) -> UnescapedString {
         t.ngettext_fmt(&self.dict, n, values, Some(self.get_lang()))
+            .into()
     }
 
     #[inline]
-    pub fn pngettext_fmt<T: TranslatablePlural, V: Display + Sized>(
+    pub fn pngettext_fmt<T: TranslatablePlural, V: Display + Sized + Clone>(
         &self,
         t: T,
         context: &'a str,
         n: u64,
         values: &[V],
-    ) -> String {
+    ) -> UnescapedString {
         t.npgettext_fmt(&self.dict, context, n, values, Some(self.get_lang()))
+            .into()
     }
+
+    #[inline]
+    pub fn gt_search_link<T: Translatable, V: Display + Sized + Clone>(
+        &self,
+        t: T,
+        value: V,
+    ) -> UnescapedString {
+        let link = format_search_link(value);
+        t.gettext_fmt(&self.dict, &[link], Some(self.get_lang()))
+            .into()
+    }
+
+    #[inline]
+    pub fn gt_search_links<T: Translatable, V: Display + Sized + Clone>(
+        &self,
+        t: T,
+        link: usize,
+        values: &[V],
+    ) -> UnescapedString {
+        let mut values = values.iter().map(|i| i.to_string()).collect::<Vec<_>>();
+        values[link] = format_search_link(&values[link]);
+        t.gettext_fmt(&self.dict, &values, Some(self.get_lang()))
+            .into()
+    }
+
+    #[inline]
+    pub fn ngt_search_links<T: TranslatablePlural, V: Display + Sized + Clone>(
+        &self,
+        t: T,
+        link: usize,
+        values: &[V],
+        n: u64,
+    ) -> UnescapedString {
+        let mut values = values.iter().map(|i| i.to_string()).collect::<Vec<_>>();
+        values[link] = format_search_link(&values[link]);
+        t.ngettext_fmt(&self.dict, n, &values, Some(self.get_lang()))
+            .into()
+    }
+}
+
+fn format_search_link<V: Display + Sized + Clone>(input: V) -> String {
+    format!(
+        "<a class='clickable no-align green' href='/search/{}'>{}</a>",
+        input, input
+    )
 }

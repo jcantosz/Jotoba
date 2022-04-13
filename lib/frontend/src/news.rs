@@ -4,7 +4,6 @@ use std::sync::Arc;
 use actix_web::{web, HttpRequest, HttpResponse};
 use config::Config;
 use localization::TranslationDict;
-use resources::news::NewsEntry;
 
 use crate::{
     templates, user_settings, {BaseData, Site},
@@ -20,11 +19,17 @@ pub async fn news(
 
     //session::init(&session, &settings);
 
-    let news: Vec<&'static NewsEntry> = resources::news::get().last_entries(5).collect::<Vec<_>>();
+    let news = resources::news::get()
+        .last_entries(5)
+        .cloned()
+        .collect::<Vec<_>>();
 
-    Ok(HttpResponse::Ok().body(render!(
-        templates::base,
-        BaseData::new(&locale_dict, settings, &config.asset_hash, &config)
-            .with_site(Site::News(news))
-    )))
+    Ok(HttpResponse::Ok().body(
+        render!(
+            templates::base,
+            BaseData::new(&locale_dict, settings, &config.asset_hash, &config)
+                .with_site(Site::News(news))
+        )
+        .render(),
+    ))
 }

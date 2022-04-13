@@ -8,6 +8,7 @@ use super::user_settings;
 use actix_web::{rt::time::timeout, web, HttpRequest, HttpResponse};
 use localization::TranslationDict;
 use percent_encoding::percent_decode;
+use types::jotoba::search::QueryType;
 
 use crate::{
     templates,
@@ -18,7 +19,6 @@ use config::Config;
 use search::{
     self,
     query::{Query, UserSettings},
-    query_parser::QueryType,
 };
 
 use super::web_error;
@@ -89,7 +89,7 @@ async fn search(
         }
     }
 
-    Ok(HttpResponse::Ok().body(render!(templates::base, search_result)))
+    Ok(HttpResponse::Ok().body(render!(templates::base, search_result).render()))
 }
 
 /// Run the search and return the `BaseData` for the result page to render
@@ -226,7 +226,7 @@ fn sentry_request_from_http(request: &HttpRequest) -> sentry::protocol::Request 
     sentry_req
 }
 
-fn redirect_home() -> HttpResponse {
+pub(crate) fn redirect_home() -> HttpResponse {
     HttpResponse::MovedPermanently()
         .append_header(("Location", "/"))
         .finish()

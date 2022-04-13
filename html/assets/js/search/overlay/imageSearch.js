@@ -2,6 +2,17 @@
  *  This file handles everything related to image-search requests
  */ 
 
+// Quick image search for STRG + V
+document.onpaste = (evt) => {
+    let dT = evt.clipboardData || window.clipboardData;
+    let file = dT.files[0];
+
+    if (file !== undefined && file.name.includes(".png")) {
+        disableUploadUrlInput(file.name);
+        openImageCropOverlay(file);
+    }
+};
+
 // Shows / Hides the image search overlay
 function toggleImageSearchOverlay() {
     let overlay = $('.overlay.image');
@@ -34,8 +45,11 @@ function imgSearchFileSelected() {
 
 // Toggles the URL input active / disabled
 var urlInputDisabled = false;
-var originalMsg = document.getElementById("imgUploadUrl").placeholder;
-var cropTarget;
+var originalMsg, cropTarget;
+
+Util.awaitDocumentReady(() => {
+    originalMsg = document.getElementById("imgUploadUrl").placeholder;
+});
 
 function resetUploadUrlInput() {
     let urlInput = document.getElementById("imgUploadUrl")
@@ -63,16 +77,16 @@ function disableUploadUrlInput(newMessage) {
 }
 
 // Opens the Image Cropping Overlay
-function openImageCropOverlay() {
+function openImageCropOverlay(pastedFile) {
     var selectedFiles = document.getElementById("imgUploadFile").files;
     var inputUrl = document.getElementById("imgUploadUrl").value;
 
-    if (selectedFiles.length > 0) {
+    if (selectedFiles.length > 0 || pastedFile !== undefined) {
         let reader = new FileReader();
         reader.onload = function(e) {
             initCroppie(e.target.result);
         }
-        reader.readAsDataURL(selectedFiles[0]);
+        reader.readAsDataURL(selectedFiles[0] || pastedFile);
         toggleCroppingModal();
     }
     else if (inputUrl.length > 0) {  
@@ -81,7 +95,7 @@ function openImageCropOverlay() {
         });
         toggleCroppingModal();
     } else {
-        Util.showMessage("error", "You need to enter a URL or upload a file!");
+        Util.showMessage("error", getText("UPLOAD_NO_INPUT"));
     }
 }
 

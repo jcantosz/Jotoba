@@ -1,4 +1,4 @@
-use crate::SearchMode;
+use crate::{regex_query::RegexSQuery, SearchMode};
 use japanese::JapaneseExt;
 use levenshtein::levenshtein;
 use once_cell::sync::Lazy;
@@ -7,10 +7,38 @@ use types::jotoba::{
     languages::Language,
     words::{sense::Gloss, Word},
 };
+use utils::real_string_len;
 
 /// A Regex matching parentheses and its contents
 pub(crate) static REMOVE_PARENTHESES: Lazy<Regex> =
     Lazy::new(|| regex::Regex::new("\\(.*\\)").unwrap());
+
+/// Order for regex-search results
+pub fn regex_order(word: &Word, found_in: &str, _query: &RegexSQuery) -> usize {
+    let mut score: usize = 100;
+
+    if !word
+        .reading
+        .alternative
+        .iter()
+        .any(|i| i.reading == found_in)
+    {
+        score += 20;
+    }
+
+    if word.is_common() {
+        score += 30;
+    }
+
+    if let Some(jlpt) = word.get_jlpt_lvl() {
+        score += 10 + (jlpt * 2) as usize;
+    }
+
+    // Show shorter words more on top
+    score = score.saturating_sub(real_string_len(&word.get_reading().reading) * 3);
+
+    score
+}
 
 /// Search order for words searched by japanese meaning/kanji/reading
 pub fn japanese_search_order(
@@ -25,7 +53,7 @@ pub fn japanese_search_order(
     let kana = &word.reading.kana.reading;
 
     if reading.reading == *query_str || word.reading.kana.reading == *query_str {
-        score += 50;
+        score += 80;
 
         // Show kana only readings on top if they match with query
         if word.reading.kanji.is_none() {
@@ -36,10 +64,10 @@ pub fn japanese_search_order(
     }
 
     if let Some(original_query) = original_query {
-        if (original_query == reading.reading || original_query == kana)
-            && query_str != reading.reading
+        if original_query == reading.reading || original_query == kana
+        //&& query_str != reading.reading
         {
-            score += 20;
+            score += 500;
         }
     }
 
@@ -49,6 +77,12 @@ pub fn japanese_search_order(
 
     // Is common
     if word.is_common() {
+        score += 20;
+    }
+
+    if word.get_reading().reading.starts_with(query_str)
+        || (query_str.is_kana() && word.reading.kana.reading.starts_with(query_str))
+    {
         score += 20;
     }
 
@@ -170,7 +204,7 @@ pub fn foreign_search_fall_back(
 
 pub(super) fn kanji_reading_search(
     word: &Word,
-    kanji_reading: &types::jotoba::kanji::Reading,
+    kanji_reading: &types::jotoba::kanji::ReadingSearch,
     relevance: f32,
 ) -> usize {
     let mut score: usize = (relevance * 25f32) as usize;

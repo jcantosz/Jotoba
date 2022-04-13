@@ -101,6 +101,9 @@ msgstr "Aktuelle Sprache"
 msgid "Currently listening"
 msgstr "Am Zuhören"
 
+msgid "No"
+msgstr "Nein"
+
 msgid "To change your language, select one of the following"
 msgstr "Um deine Sprache zu wechseln, wähle eins der folgenden"
 
@@ -448,8 +451,17 @@ msgstr "Anzahl der Kanji auf einer Seite"
 msgid "Use dark mode"
 msgstr "Dark Mode"
 
+msgid "Show kanji-animation on load"
+msgstr "Zeige Kanji-Animation vollständig"
+
+msgid "Show kanji-animation numbers"
+msgstr "Nummeriere Zeichenreihenfolge"
+
 msgid "Default kanji animation speed"
 msgstr "Kanji Animationsgeschwindigkeit"
+
+msgid "Enable Quick-Copy"
+msgstr "\"Quick-Copy\" aktivieren"
 
 msgid "Accept Cookies"
 msgstr "Cookies akzeptieren"
@@ -711,15 +723,17 @@ msgstr "Namensherkunft"
 
 ## Kanji results
 
-# strokes suffix
 
 msgid "Part"
 msgid_plural "Parts"
 msgstr[0] "Bestandteil"
 msgstr[1] "Bestandteile"
 
-msgid "strokes"
-msgstr "Striche"
+# strokes suffix
+msgid "{} stroke"
+msgid_plural "{} strokes"
+msgstr[0] "{} Strich"
+msgstr[1] "{} Striche"
 
 msgid "Radical"
 msgstr "Radikal"
@@ -758,8 +772,10 @@ msgstr "Japanische Namen"
 msgid "Words and kanji"
 msgstr "Wörter und Kanjis"
 
-msgid "{} could be an inflection of"
-msgstr "{} könnte eine Flexion sein von"
+msgid "{} could be an inflection of {}, with this form:"
+msgid_plural "{} könnte eine Flexion sein von {}, mit diesen Formen:"
+msgstr[0] "{} könnte eine Flexion sein von {}, mit dieser Form:"
+msgstr[1] "{} könnte eine Flexion sein von {}, mit diesen Formen:"
 
 msgid "Temporarily switched language to {}"
 msgstr "Vorübergehend zu {} gewechselt"
@@ -797,8 +813,8 @@ msgid "Causative"
 msgstr "Kausativ"
 
 msgctxt "inflection"
-msgid "CausativePassive"
-msgstr "Kausativ oder Passiv"
+msgid "PotentialOrPassive"
+msgstr "Potential or Passiv"
 
 msgctxt "inflection"
 msgid "Imperative"
@@ -806,7 +822,23 @@ msgstr "Imperativ"
 
 msgctxt "inflection"
 msgid "Tai"
-msgstr "Tai-form"
+msgstr "たい (Gibt an etwas tun zu wollen)"
+
+msgctxt "inflection"
+msgid "TeIru"
+msgstr "ている (Gibt eine andauernde Aktion an)"
+
+msgctxt "inflection"
+msgid "TeAru"
+msgstr "てある (Bedeutet etwas wurde getan)"
+
+msgctxt "inflection"
+msgid "TeMiru"
+msgstr "てみる (Bedeutet etwas zu \"versuchen\")"
+
+msgctxt "inflection"
+msgid "Tara"
+msgstr "たら (Gibt eine Bedingung an)"
 
 msgid "Taught in {} grade"
 msgstr "Beigebracht in der {}. Klasse"
@@ -830,11 +862,11 @@ msgstr "Kollokationen"
 msgid "Conjugations"
 msgstr "Konjugationen"
 
-msgid "Antonym of"
-msgstr "Antonym von"
+msgid "Antonym of {}"
+msgstr "Antonym von {}"
 
-msgid "See also"
-msgstr "Siehe auch"
+msgid "See also {}"
+msgstr "Siehe auch {}"
 
 msgid "Pitch accent"
 msgstr "Tonhöhenakzent"
@@ -884,7 +916,7 @@ msgstr "Vorlesen"
 msgid "common word"
 msgstr "häufiges Wort"
 
-msgid "JLPT"
+msgid "JLPT N{}"
 msgstr ""
 
 msgid "Sentence search"
@@ -892,6 +924,9 @@ msgstr "Beispielsätze"
 
 msgid "Download audio"
 msgstr "Audio herunterladen"
+
+msgid "Direct reference"
+msgstr "Einzelnachweis"
 
 # "no words found"
 msgid "words"

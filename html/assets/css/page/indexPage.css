@@ -1,14 +1,5 @@
 /* ----------------- Index Page ----------------- */
 
-.index-noselect {
-    -webkit-touch-callout: none; /* iOS Safari */
-    -webkit-user-select: none; /* Safari */ /* Konqueror HTML */
-    -moz-user-select: none; /* Old versions of Firefox */
-    -ms-user-select: none; /* Internet Explorer/Edge */
-    -o-user-select:none; /* Opera */
-    user-select: none; /* Non-prefixed version, currently supported by Chrome, Edge, Opera and Firefox */;
-}
-
 .title {
     padding-top: 5%;
     padding-bottom: 2.25%;
@@ -60,6 +51,24 @@ form {
 .notificationBtn {
     top: 29px;
     right: 25px;
+}
+
+.notificationPoint {
+    display: none;
+    position: absolute;
+    pointer-events: none;
+    top: 32px;
+    right: 30px;
+    padding: 0.25rem;
+    border-radius: 2rem;
+    z-index: 500;
+    width: 9px;
+    height: 9px;
+    background-color: var(--alert);
+}
+
+.notificationBtn.update ~ .notificationPoint {
+    display: block;
 }
 
 .infoBtn {
@@ -185,7 +194,7 @@ form {
         display: none;
     }
 
-    div:not(.inner-form) > .index-btn-container {
+    main > .index-btn-container {
         flex-direction: row-reverse;
         place-content: flex-start;
     }
@@ -209,6 +218,11 @@ form {
     }
 
     .notificationBtn {
+        top: 20px;
+        right: 15px;
+    }
+
+    .notificationPoint {
         top: 20px;
         right: 15px;
     }

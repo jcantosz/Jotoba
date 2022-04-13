@@ -8,7 +8,17 @@ const dateSettings = { year: 'numeric', month: 'short', day: 'numeric' };
 // The util "parent"
 function Util () {};
 
-// Runs callback fn on document ready
+// Runs callback fn when document is done loading DOM-Elements
+Util.awaitDocumentInteractive = function(callback) {
+  let readyWait = window.setInterval(() => {
+      if (document.readyState == "interactive" || document.readyState == "complete") {
+          callback();
+          window.clearInterval(readyWait);
+      }
+  }, 10);
+}
+
+// Runs callback fn when document is done loading
 Util.awaitDocumentReady = function(callback) {
     let readyWait = window.setInterval(() => {
         if (document.readyState == "complete") {
@@ -40,6 +50,20 @@ Util.loadScript = function(url, async, attributes, callback) {
 
     // Append and load
     document.head.appendChild(s);
+}
+
+// Checks if a given element is overflown
+Util.checkOverflow = function(el) {
+  var curOverflow = el.style.overflow;
+
+  if (!curOverflow || curOverflow === "visible")
+     el.style.overflow = "hidden";
+
+  var isOverflowing = el.clientWidth < el.scrollWidth || el.clientHeight < el.scrollHeight;
+
+  el.style.overflow = curOverflow;
+
+  return isOverflowing;
 }
 
 // Re-Encodes a decoded HTML
@@ -74,4 +98,9 @@ Util.toLocaleDateString = function(unixTime) {
 // Returns whether the current page is index or not
 Util.isIndexPage = function() {
   return window.location.origin+"/" == document.location.href;
+}
+
+// Returns whether the current page is listed under {index}/{path}
+Util.isInPath = function(path) {
+  return document.location.href.startsWith(window.location.origin+"/"+path);
 }

@@ -1,18 +1,18 @@
 .search-annotation {
     color: var(--tagColor);
-    display: flex;
-    align-items: flex-start;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    overflow-y: auto;
     max-height: 150px;
-    height: -webkit-max-content;
-    height: -moz-max-content;
-    height: max-content;
-    padding-right: 75px;
-    padding-left: 75px;
-    scrollbar-width: none;
+    margin-bottom: 15px;
+    overflow: auto;
+    display: flex;
+    justify-content: center;
+}
+
+.search-annotation .kanji-preview {
+    line-height: unset;
+}
+
+.search-annotation.no-center {
+    justify-content: unset;
 }
 
 .search-annotation::-webkit-scrollbar {
@@ -32,8 +32,7 @@
 /* Mobile only */
 @media only screen and (max-width: 600px) {
     .search-annotation {
-        padding-right: 30px;
-        padding-left: 30px;
+        margin: -15px 0 0 5vw;
     }
     
     .search-inflection {

@@ -117,20 +117,6 @@ Util.scrollTo = function (final, duration) {
     window.requestAnimationFrame(animateScroll);
 };
   
-// Checks if a given element is overflown
-Util.checkOverflow = function checkOverflow(el) {
-   var curOverflow = el.style.overflow;
-
-   if (!curOverflow || curOverflow === "visible")
-      el.style.overflow = "hidden";
-
-   var isOverflowing = el.clientWidth < el.scrollWidth || el.clientHeight < el.scrollHeight;
-
-   el.style.overflow = curOverflow;
-
-   return isOverflowing;
-}
-
 // Checks if child is contained in parent
 Util.isChildOf = function (parent, child) {
     var node = child.parentNode;
@@ -295,7 +281,7 @@ Util.deleteAllCookies = function() {
 }
 
 // Parses the given value into a boolean
-Util.toBoolean = function(value) {
+Util.toBoolean = function(value, defaultValue) {
     switch (value) {
         case 0:
         case "0":
@@ -307,5 +293,9 @@ Util.toBoolean = function(value) {
         case "true":
         case true:
             return true;
+        default:
+            if (defaultValue)
+                return defaultValue;
+            return false;
     }
 }

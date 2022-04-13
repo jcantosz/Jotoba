@@ -15,6 +15,7 @@ pub struct Item {
 
 #[derive(PartialEq, Clone)]
 pub struct Sentence {
+    pub id: u32,
     pub content: String,
     pub furigana: String,
     pub translation: String,
@@ -30,11 +31,7 @@ impl Sentence {
 
     #[inline]
     pub fn get_english(&self) -> Option<&str> {
-        if self.eng == "-" {
-            None
-        } else {
-            Some(&self.eng)
-        }
+        (self.eng != "-").then(|| self.eng.as_str())
     }
 
     #[inline]
@@ -48,6 +45,7 @@ impl Sentence {
             translation = s.get_translations(Language::English);
         }
         Some(Self {
+            id: s.id,
             translation: translation?.to_string(),
             content: s.japanese,
             furigana: s.furigana,
@@ -58,6 +56,7 @@ impl Sentence {
 }
 
 impl From<(Vec<Item>, usize, bool)> for SentenceResult {
+    #[inline]
     fn from((items, len, hidden): (Vec<Item>, usize, bool)) -> Self {
         Self { items, len, hidden }
     }

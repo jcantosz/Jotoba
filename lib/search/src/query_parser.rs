@@ -1,13 +1,14 @@
 use std::{cmp::Ordering, str::FromStr};
 
 use itertools::Itertools;
-use localization::{language::Language, traits::Translatable, TranslationDict};
-use serde::Deserialize;
 
 use japanese::JapaneseExt;
 use types::jotoba::{
-    kanji, languages::Language as ContentLanguage, words::part_of_speech::PosSimple,
+    kanji, languages::Language as ContentLanguage, search::QueryType,
+    words::part_of_speech::PosSimple,
 };
+
+use crate::regex_query;
 
 use super::query::{Form, Query, QueryLang, SearchTypeTag, Tag, UserSettings};
 
@@ -25,62 +26,6 @@ pub struct QueryParser {
     language_override: Option<ContentLanguage>,
 }
 
-#[derive(Deserialize, Debug, Copy, Clone, PartialEq, Hash)]
-pub enum QueryType {
-    #[serde(rename = "1")]
-    Kanji,
-    #[serde(rename = "2")]
-    Sentences,
-    #[serde(rename = "3")]
-    Names,
-    #[serde(rename = "0", other)]
-    Words,
-}
-
-impl QueryType {
-    /// Iterate over all query types
-    pub fn iterate() -> impl Iterator<Item = Self> {
-        vec![Self::Kanji, Self::Sentences, Self::Names, Self::Words].into_iter()
-    }
-
-    pub fn get_translated<'a>(
-        &self,
-        dict: &'a TranslationDict,
-        language: Option<Language>,
-    ) -> &'a str {
-        dict.gettext(self.get_id(), language)
-    }
-
-    #[inline]
-    pub fn get_type_id(&self) -> u8 {
-        match self {
-            QueryType::Kanji => 1,
-            QueryType::Sentences => 2,
-            QueryType::Names => 3,
-            QueryType::Words => 0,
-        }
-    }
-}
-
-impl Translatable for QueryType {
-    #[inline]
-    fn get_id(&self) -> &'static str {
-        match self {
-            QueryType::Kanji => "Kanji",
-            QueryType::Sentences => "Sentences",
-            QueryType::Names => "Names",
-            QueryType::Words => "Words",
-        }
-    }
-}
-
-impl Default for QueryType {
-    #[inline]
-    fn default() -> Self {
-        Self::Words
-    }
-}
-
 impl QueryParser {
     pub fn new(
         query: String,
@@ -89,8 +34,13 @@ impl QueryParser {
         page: usize,
         word_index: usize,
         trim: bool,
+        url_l_overr: Option<ContentLanguage>,
     ) -> QueryParser {
-        let (query_stripped, language_override) = strip_lang_override(&query);
+        let (query_stripped, mut language_override) = strip_lang_override(&query);
+
+        if language_override.is_none() && url_l_overr.is_some() {
+            language_override = url_l_overr;
+        }
 
         // Split query into the actual query and possibly available tags
         let (parsed_query, tags) = Self::partition_tags_query(&query_stripped, trim);
@@ -246,7 +196,7 @@ impl QueryParser {
     }
 
     /// Returns Some(KanjiReading) if the query is a kanji reading query
-    fn parse_kanji_reading(&self) -> Option<kanji::Reading> {
+    fn parse_kanji_reading(&self) -> Option<kanji::ReadingSearch> {
         // Format of kanji query: '<Kanji> <reading>'
         if utils::real_string_len(&self.query) >= 3 && self.query.contains(' ') {
             let split: Vec<_> = self.query.split(' ').collect();
@@ -259,7 +209,7 @@ impl QueryParser {
                 && utils::real_string_len(kanji_literal) == 1
             {
                 // Kanji detected
-                return Some(kanji::Reading {
+                return Some(kanji::ReadingSearch {
                     literal: split[0].chars().next().unwrap(),
                     reading: split[1].to_string(),
                 });
@@ -310,7 +260,12 @@ fn get_jp_part(inp: &str) -> u8 {
 
 /// Tries to determine between Japanese/Non japnaese
 pub fn parse_language(query: &str) -> QueryLang {
-    let query = format_kanji_reading(query);
+    let query = strip_regex(query).unwrap_or_else(|| query.to_string());
+    if utils::korean::is_hangul_str(&query) {
+        return QueryLang::Korean;
+    }
+
+    let query = format_kanji_reading(&query);
 
     // how many percent of the characters have to be japanese in order to rank a text as japanese text
     let threshold = 40;
@@ -329,6 +284,12 @@ pub fn format_kanji_reading(s: &str) -> String {
 
 pub fn calc_page_offset(page: usize, page_size: usize) -> usize {
     page.saturating_sub(1) * page_size
+}
+
+/// Removes regex parts from a query. Returns `None` if `query` does not contain regex symbols
+fn strip_regex(query: &str) -> Option<String> {
+    let rg_query = regex_query::RegexSQuery::new(query)?;
+    Some(rg_query.get_chars().into_iter().collect())
 }
 
 #[cfg(test)]

@@ -98,6 +98,9 @@ msgstr "Kiválasztott nyelv"
 msgid "Currently listening"
 msgstr "Éppen figyel"
 
+msgid "No"
+msgstr "Nem"
+
 msgid "To change your language, select one of the following"
 msgstr "A nyelv megváltoztatásához válaszd ki az egyiket az alábbiak közül"
 
@@ -451,6 +454,9 @@ msgstr "Sötét téma használata"
 msgid "Default kanji animation speed"
 msgstr "Alapértelmezett kanji animáció sebessége"
 
+msgid "Enable Quick-Copy"
+msgstr ""
+
 msgid "Accept Cookies"
 msgstr "Sütik Elfogadása"
 
@@ -713,15 +719,16 @@ msgstr "Név eredete"
 
 ## Kanji results
 
-# strokes suffix
-
 msgid "Part"
 msgid_plural "Parts"
 msgstr[0] "Rész"
 msgstr[1] "Részek"
 
-msgid "strokes"
-msgstr "vonás"
+# strokes suffix
+msgid "{} stroke"
+msgid_plural "{} strokes"
+msgstr[0] "{} stroke"
+msgstr[1] "{} strokes"
 
 msgid "Radical"
 msgstr "Gyök"
@@ -760,8 +767,10 @@ msgstr "Japán nevek"
 msgid "Words and kanji"
 msgstr "Szavak és kanjik"
 
-msgid "{} could be an inflection of"
-msgstr "{} egy ragozott alakja lehet annak, hogy"
+msgid "{} could be an inflection of {}, with this form:"
+msgid_plural "{} could be an inflection of {}, with this forms:"
+msgstr[0] "{} could be an inflection of {}, with this form:"
+msgstr[1] "{} could be an inflection of {}, with this forms:"
 
 msgid "Temporarily switched language to {}"
 msgstr "Átmenetileg a nyelv megváltozott {}-ra/re"
@@ -799,8 +808,8 @@ msgid "Causative"
 msgstr "Okhatározó"
 
 msgctxt "inflection"
-msgid "CausativePassive"
-msgstr "Okhatározó vagy Szenvedp"
+msgid "PotentialOrPassive"
+msgstr "Potenciális vagy szenvedő"
 
 msgctxt "inflection"
 msgid "Imperative"
@@ -808,7 +817,23 @@ msgstr "Felszólító"
 
 msgctxt "inflection"
 msgid "Tai"
-msgstr "Tai"
+msgstr "たい (Vágyat, kívánságot fejez ki)"
+
+msgctxt "inflection"
+msgid "TeIru"
+msgstr "ている (Egy jelenleg folyamatban lévő cselekvést fejez ki)"
+
+msgctxt "inflection"
+msgid "TeAru"
+msgstr "てある (Egy befejezett cselekvést fejez ki)"
+
+msgctxt "inflection"
+msgid "TeMiru"
+msgstr "てみる (Egy cselekvés megpróbálását fejezi ki)"
+
+msgctxt "inflection"
+msgid "Tara"
+msgstr "たら (Egy feltételt fejez ki)"
 
 msgid ", with this form:"
 msgid_plural ", with these forms:"
@@ -832,11 +857,11 @@ msgstr "Besorolások"
 msgid "Conjugations"
 msgstr "Ragozások"
 
-msgid "Antonym of"
-msgstr "Ellentetje:"
+msgid "Antonym of {}"
+msgstr "Ellentetje: {}"
 
-msgid "See also"
-msgstr "Lásd még"
+msgid "See also {}"
+msgstr "Lásd még {}"
 
 msgid "Pitch accent"
 msgstr "Zenei hangsúly"
@@ -886,14 +911,17 @@ msgstr "Hanganyag lejátszása"
 msgid "common word"
 msgstr "gyakori szó"
 
-msgid "JLPT"
-msgstr "JLPT"
+msgid "JLPT N{}"
+msgstr ""
 
 msgid "Download audio"
 msgstr "Hanganyag letöltése"
 
 msgid "Sentence search"
 msgstr "Mondatok keresése"
+
+msgid "Direct reference"
+msgstr "Közvetlen hivatkozás"
 
 # "no words found"
 msgid "words"

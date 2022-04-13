@@ -13,7 +13,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"PO-Revision-Date: 2021-11-29 21:47+0100\n"
+"PO-Revision-Date: 2021-12-12 16:30+0100\n"
 "Last-Translator:  <jojii@gmx.net>\n"
 "Language-Team: English\n"
 "Language: en\n"
@@ -96,6 +96,9 @@ msgid "Current language"
 msgstr ""
 
 msgid "Currently listening"
+msgstr ""
+
+msgid "No"
 msgstr ""
 
 msgid "To change your language, select one of the following"
@@ -448,7 +451,16 @@ msgstr ""
 msgid "Use dark mode"
 msgstr ""
 
+msgid "Show kanji on load"
+msgstr ""
+
+msgid "Show kanji numbers"
+msgstr ""
+
 msgid "Default kanji animation speed"
+msgstr ""
+
+msgid "Enable Quick-Copy"
 msgstr ""
 
 msgid "Accept Cookies"
@@ -713,15 +725,16 @@ msgstr ""
 
 ## Kanji results
 
-# strokes suffix
-
 msgid "Part"
 msgid_plural "Parts"
 msgstr[0] "Part"
 msgstr[1] "Parts"
 
-msgid "strokes"
-msgstr ""
+# strokes suffix
+msgid "{} stroke"
+msgid_plural "{} strokes"
+msgstr[0] "{} stroke"
+msgstr[1] "{} strokes"
 
 msgid "Radical"
 msgstr ""
@@ -760,8 +773,10 @@ msgstr ""
 msgid "Words and kanji"
 msgstr ""
 
-msgid "{} could be an inflection of"
-msgstr ""
+msgid "{} could be an inflection of {}, with this form:"
+msgid_plural "{} could be an inflection of {}, with this forms:"
+msgstr[0] "{} could be an inflection of {}, with this form:"
+msgstr[1] "{} could be an inflection of {}, with this forms:"
 
 msgid "Temporarily switched language to {}"
 msgstr ""
@@ -799,8 +814,8 @@ msgid "Causative"
 msgstr ""
 
 msgctxt "inflection"
-msgid "CausativePassive"
-msgstr "Causative or Passive"
+msgid "PotentialOrPassive"
+msgstr "Potential or Passive"
 
 msgctxt "inflection"
 msgid "Imperative"
@@ -808,7 +823,23 @@ msgstr ""
 
 msgctxt "inflection"
 msgid "Tai"
-msgstr ""
+msgstr "たい (Want to do something)"
+
+msgctxt "inflection"
+msgid "TeIru"
+msgstr "ている (Indicates an action that is ongoing)"
+
+msgctxt "inflection"
+msgid "TeAru"
+msgstr "てある (Indicates an action that has been done intentionally)"
+
+msgctxt "inflection"
+msgid "TeMiru"
+msgstr "てみる (Means to \"Try\" something)"
+
+msgctxt "inflection"
+msgid "Tara"
+msgstr "たら (States a condition)"
 
 msgid ", with this form:"
 msgid_plural ", with these forms:"
@@ -832,10 +863,10 @@ msgstr ""
 msgid "Conjugations"
 msgstr ""
 
-msgid "Antonym of"
-msgstr ""
+msgid "Antonym of {}"
+msgstr "Antonym of {}"
 
-msgid "See also"
+msgid "See also {}"
 msgstr ""
 
 msgid "Pitch accent"
@@ -886,13 +917,16 @@ msgstr ""
 msgid "common word"
 msgstr ""
 
-msgid "JLPT"
+msgid "JLPT N{}"
 msgstr ""
 
 msgid "Download audio"
 msgstr ""
 
 msgid "Sentence search"
+msgstr ""
+
+msgid "Direct reference"
 msgstr ""
 
 # "no words found"

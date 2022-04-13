@@ -3,19 +3,18 @@ use std::{
     str::FromStr,
 };
 
-use crate::query_parser;
-
-use super::query_parser::QueryType;
+use crate::{query_parser, regex_query::RegexSQuery};
 
 use itertools::Itertools;
-use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
+use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use types::jotoba::{
     kanji,
     languages::Language,
+    search::QueryType,
     words::{misc::Misc, part_of_speech::PosSimple},
 };
 
-const QUERY_ENCODE_SET: &AsciiSet = &CONTROLS.add(b'/');
+const QUERY_ENCODE_SET: &AsciiSet = &NON_ALPHANUMERIC.add(b'/');
 
 /// A single user provided query in a parsed format
 #[derive(Debug, Clone, PartialEq, Default, Hash)]
@@ -108,6 +107,7 @@ pub enum SearchTypeTag {
 pub enum QueryLang {
     Japanese,
     Foreign,
+    Korean,
     Undetected,
 }
 
@@ -119,7 +119,7 @@ pub enum Form {
     /// Multiple words were provided
     MultiWords,
     /// Kanji reading based search eg. '気 ケ'
-    KanjiReading(kanji::Reading),
+    KanjiReading(kanji::ReadingSearch),
     /// Tag only. Implies query string to be empty
     TagOnly,
     /// Form was not recognized
@@ -128,7 +128,7 @@ pub enum Form {
 
 impl Form {
     #[inline]
-    pub fn as_kanji_reading(&self) -> Option<&kanji::Reading> {
+    pub fn as_kanji_reading(&self) -> Option<&kanji::ReadingSearch> {
         if let Self::KanjiReading(v) = self {
             Some(v)
         } else {
@@ -390,6 +390,27 @@ impl Query {
     /// Returns the language with lang override applied
     pub fn get_lang_with_override(&self) -> Language {
         self.language_override.unwrap_or(self.settings.user_lang)
+    }
+
+    /// Returns a `RegexSQuery` if the query contains a valid regex
+    pub fn as_regex_query(&self) -> Option<RegexSQuery> {
+        // Only japanese regex support (for now)
+        if self.language != QueryLang::Japanese {
+            return None;
+        }
+
+        // returns `None` if no regex given, so we don't need to check for that here
+        RegexSQuery::new(&self.query)
+    }
+}
+
+impl UserSettings {
+    /// Returns `true` if an action has to be done for english too. This
+    /// Is the case if the user wants to see enlgish results as well but
+    /// didn't set english as main language
+    #[inline]
+    pub fn show_english(&self) -> bool {
+        self.show_english && self.user_lang != Language::English
     }
 }
 

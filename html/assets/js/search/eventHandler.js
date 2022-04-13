@@ -10,7 +10,7 @@ $(document).on("keydown", (event) => {
     switch (event.key) {
         case "ArrowUp": // Use suggestion above current
             event.preventDefault();
-            changeSuggestionIndex(-1);
+            Suggestions.overlay.changeSuggestionIndex(-1);
             break;
         case "ArrowDown": // Use suggestion beneath current
         case "Tab":
@@ -19,12 +19,12 @@ $(document).on("keydown", (event) => {
             if (event.key == "Tab" && shiftPressed) {
               direction = -1;
             }
-            changeSuggestionIndex(direction);
+            Suggestions.overlay.changeSuggestionIndex(direction);
             break;
         case "Enter": // Start the search
             if (currentSuggestionIndex > 0) {
                 event.preventDefault();
-                activateSelection();
+                Suggestions.overlay.activateSelection();
             } else {
                 $('#searchBtn').click();
             }
@@ -32,43 +32,43 @@ $(document).on("keydown", (event) => {
     }
 });
 
-// Event whenever the user types into the search bar
-document.querySelector("#search").addEventListener("input", e => {
-    if (input.value != oldInputValue) {
-        callApiAndSetShadowText();
+// Adding listeners
+Util.awaitDocumentReady(() => {
+
+    // Also show shadow text if user clicked before focus event could be caught
+    if ($(input).is(":focus")) {
+        Suggestions.updateSuggestions();
     }
-    oldInputValue = input.value;
 
-    toggleSearchIcon(200);
+    // Event whenever the user types into the search bar
+    document.getElementById("search").addEventListener("input", e => {
+        Suggestions.updateSuggestions();
+        toggleSearchIcon(200);
+    });
+
+    // Check if input was focussed / not focussed to show / hide overlay
+    document.getElementById("search").addEventListener("focus", e => {
+        Suggestions.updateSuggestions();
+    });
+
+    // Event whenever the user types into the search bar
+    document.querySelector("#kanji-search").addEventListener("input", e => {
+        getRadicalSearchResults();
+    });
+
+    // When clicking anything but the search bar or dropdown (used to hide overlays)
+    document.addEventListener("click", e => {
+        if (!Util.isChildOf(searchRow, e.target)) {
+            sContainer.parentElement.classList.add("hidden");
+        }
+    });
+
+    // Check on resize if shadow text would overflow the search bar and show / hide it
+    window.addEventListener("resize", e => {
+        setShadowText();
+    });
 });
 
-// Check if input was focussed / not focussed to show / hide overlay 長い
-document.querySelector("#search").addEventListener("focus", e => {
-    if (!keepSuggestions) {
-        callApiAndSetShadowText();
-    }
-    showContainer();
-    keepSuggestions = false;
-});
-
-// Event whenever the user types into the search bar
-document.querySelector("#kanji-search").addEventListener("input", e => {
-    getRadicalSearchResults();
-});
-
-// Outside-Click event (used to hide overlays...)
-document.addEventListener("click", e => {
-    // When clicking anything but the search bar or dropdown
-    if (!Util.isChildOf(searchRow, e.target)) {
-        container.classList.add("hidden");
-        keepSuggestions = true;
-    }
-});
-
-// Check on resize if shadow text would overflow the search bar and show / hide it
-window.addEventListener("resize", e => {
-    setShadowText();
-});
 
 // Scroll sentence-reader to display selected index
 Util.awaitDocumentReady(() => {
@@ -82,8 +82,8 @@ Util.awaitDocumentReady(() => {
 // Initialize Pagination Buttons
 Util.awaitDocumentReady(() => {
     $('.pagination-item:not(.disabled) > button').on("click", (e) => {
-        var searchValue = $('#search').val();
-        var searchType = $('#search-type').val();
+        var searchValue = JotoTools.getCurrentSearch();
+        var searchType = JotoTools.getCurrentSearchType();
         var targetPage = $(e.target.parentNode).attr("target-page");
         Util.loadUrl(JotoTools.createUrl(searchValue, searchType, targetPage));
     });

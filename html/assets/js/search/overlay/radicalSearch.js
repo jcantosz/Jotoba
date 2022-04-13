@@ -37,14 +37,15 @@ var radicalMask = [
     [0]
 ];
 
-const baseRadResult = $('.rad-results')[0].innerHTML;
+var baseRadResult;
 var currentSearchInput;
 var lastRadicalSearchResult;
 
 Util.awaitDocumentReady(() => {
+    baseRadResult = $('.rad-results')[0].innerHTML;
     loadRadicals(0);
 
-    // Used to re-focus upon using Radical Btns
+    // Used to re-focus searchbar upon using Radical Btns
     $("#kanji-search").focus(e => {
         currentSearchInput = $("#kanji-search");
     });
@@ -59,17 +60,17 @@ function toggleRadicalOverlay() {
 
     let overlay = $('.overlay.radical');
     overlay.toggleClass('hidden');
+    sContainer.parentElement.classList.add("hidden");
 
     // Reset on close
     if (overlay.hasClass("hidden")) {
         resetRadPicker()
-        container.classList.add("hidden");
-        container_rad.classList.add("hidden");
-        recognition.stop();
+        rContainer.classList.add("hidden");
+        Suggestions.overlay.show();
     } else {
         $('.rad-results').html(baseRadResult);
         $('.rad-results').removeClass("hidden");
-        getSuggestionApiData();
+        Suggestions.updateSuggestions();
         scrollSearchIntoView();
         $('#kanji-search').focus();
     }
@@ -101,7 +102,7 @@ function handleKanjiSelect(event) {
     $('#search').val($('#search').val() + event.target.innerHTML);
 
     // Update search bar
-    callApiAndSetShadowText();
+    Suggestions.updateSuggestions(getSelectedRadicalArray());
     toggleSearchIcon(200);
 
     // Focus the last search bar
@@ -135,6 +136,9 @@ function handleRadicalSelect(event) {
     
     // Focus the last search bar
     currentSearchInput.focus();
+
+    // Update search bar
+    Suggestions.updateSuggestions(getSelectedRadicalArray());
 }
 
 // Opens the Radical Page at the given index
@@ -364,20 +368,27 @@ function closeAllTabs() {
     }
 }
 
-// Calls the API to get all kanji and radicals that are still possible
-function getRadicalInfo() {
-    // Create the JSON
-    let radicalJSON = {
-        "radicals": []
-    }
+// Returns an array only containing selected radicals
+function getSelectedRadicalArray() {
+    let arr = [];
 
     // Populate radicals within JSON with all selected radicals
     for (let i = 0; i < radicalMask.length; i++) {
         for (let j = 0; j < radicalMask[i].length; j++) {
             if (radicalMask[i][j] == 1) {
-                radicalJSON.radicals.push(radicals[i][j]);
+                arr.push(radicals[i][j]);
             }
         }
+    }
+
+    return arr;
+}
+
+// Calls the API to get all kanji and radicals that are still possible
+function getRadicalInfo() {
+    // Create the JSON
+    let radicalJSON = {
+        "radicals": getSelectedRadicalArray()
     }
 
     // No Radicals selected, Reset
@@ -409,7 +420,7 @@ function getRadicalInfo() {
         },
         error: function (result) {
             // Print Error
-            Util.showMessage("error", "Could not reach Radical API.")
+            Util.showMessage("error", getText("RADICAL_API_UNREACHABLE"))
         }
     });
 }

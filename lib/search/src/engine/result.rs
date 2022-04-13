@@ -1,3 +1,4 @@
+use super::result_item::ResultItem;
 use std::{
     cmp::min,
     collections::{BinaryHeap, HashSet},
@@ -6,8 +7,6 @@ use std::{
     ops::Index,
     vec::IntoIter,
 };
-
-use super::result_item::ResultItem;
 
 /// A result from a search. Contains information about the actual amount of items returned and the
 /// limited items to display
@@ -32,6 +31,38 @@ impl<T: PartialEq + Debug> Debug for SearchResult<T> {
             .field("total_items", &self.total_items)
             .field("items", &self.items)
             .finish()
+    }
+}
+
+impl<T: PartialEq> SearchResult<T> {
+    /// New SearchResult from a list of items
+    pub fn from_items<U: Into<ResultItem<T>>>(items: Vec<U>, total_len: usize) -> Self {
+        Self::from_items_order(items, total_len, true)
+    }
+
+    /// New SearchResult from a list of items. Requires `items` to be sorted
+    pub fn from_items_ordered<U: Into<ResultItem<T>>>(items: Vec<U>, total_len: usize) -> Self {
+        Self::from_items_order(items, total_len, false)
+    }
+
+    fn from_items_order<U: Into<ResultItem<T>>>(
+        items: Vec<U>,
+        total_len: usize,
+        order: bool,
+    ) -> Self {
+        let mut items = items
+            .into_iter()
+            .map(|item| item.into())
+            .collect::<Vec<_>>();
+
+        if order {
+            items.sort_by(|a, b| a.cmp(&b).reverse());
+        }
+
+        Self {
+            total_items: total_len,
+            items,
+        }
     }
 }
 

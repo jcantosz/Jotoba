@@ -5,40 +5,25 @@ pub mod word;
 
 use actix_web::web::Json;
 use error::api_error::RestError;
-use types::jotoba::languages::Language;
 use search::{
     query::{Query, UserSettings},
-    query_parser::{QueryParser, QueryType},
+    query_parser::QueryParser,
 };
-use serde::Deserialize;
+use types::{api::search::SearchRequest, jotoba::search::QueryType};
 
 pub type Result<T> = std::result::Result<T, RestError>;
 
-/// An Search API payload
-#[derive(Deserialize)]
-pub struct SearchRequest {
-    #[serde(rename = "query")]
-    query_str: String,
+pub(crate) fn parse_query(payload: Json<SearchRequest>, q_type: QueryType) -> Result<Query> {
+    let settings = UserSettings {
+        user_lang: payload.language,
+        show_english: !payload.no_english,
+        ..UserSettings::default()
+    };
 
-    #[serde(default)]
-    language: Language,
+    let q_str = payload.query_str.clone();
+    let query = QueryParser::new(q_str, q_type, settings, 0, 0, true, None)
+        .parse()
+        .ok_or(RestError::BadRequest)?;
 
-    #[serde(default)]
-    no_english: bool,
-}
-
-impl SearchRequest {
-    fn parse(payload: Json<SearchRequest>, q_type: QueryType) -> Result<Query> {
-        let settings = UserSettings {
-            user_lang: payload.language,
-            show_english: !payload.no_english,
-            ..UserSettings::default()
-        };
-
-        let query = QueryParser::new(payload.query_str.clone(), q_type, settings, 0, 0, true)
-            .parse()
-            .ok_or(RestError::BadRequest)?;
-
-        Ok(query)
-    }
+    Ok(query)
 }

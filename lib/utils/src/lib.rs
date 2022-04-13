@@ -1,4 +1,5 @@
 pub mod binary_search;
+pub mod korean;
 
 use itertools::Itertools;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
@@ -265,4 +266,14 @@ pub fn diff<T: Sub<Output = T> + Ord>(a: T, b: T) -> T {
     } else {
         b - a
     }
+}
+
+/// Formats romaji text by removing all 'n' occurences of n+ for 1 < |n| <= 4
+#[inline]
+pub fn format_romaji_nn(inp: &str) -> String {
+    inp.replace("nn", "ん")
+        .replace("n'", "ん")
+        .replace("nnn", "nn")
+        .replace("nnnn", "nnn")
+        .replace("nnnnn", "nnnn")
 }

@@ -1,24 +1,9 @@
 use actix_web::web::Json;
-use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-
-/// Request struct for kanji_by_radicals endpoint
-#[derive(Deserialize)]
-pub struct RadicalsRequest {
-    pub radicals: Vec<char>,
-}
-
-/// Response struct for kanji_by_radicals endpoint
-#[derive(Serialize)]
-pub struct RadicalsResponse {
-    pub kanji: HashMap<i32, Vec<char>>,
-    pub possible_radicals: Vec<char>,
-}
+use types::api::radical::find_kanji::{Request, Response};
 
 /// Get kanji by its radicals
-pub async fn kanji_by_radicals(
-    payload: Json<RadicalsRequest>,
-) -> Result<Json<RadicalsResponse>, actix_web::Error> {
+pub async fn kanji_by_radicals(payload: Json<Request>) -> Result<Json<Response>, actix_web::Error> {
     let kanji_retr = resources::get().kanji();
 
     let mut possible_radicals: HashSet<char> = HashSet::new();
@@ -37,7 +22,7 @@ pub async fn kanji_by_radicals(
 
     let possible_radicals = possible_radicals.into_iter().collect();
 
-    Ok(Json(RadicalsResponse {
+    Ok(Json(Response {
         possible_radicals,
         kanji: kanji_res,
     }))

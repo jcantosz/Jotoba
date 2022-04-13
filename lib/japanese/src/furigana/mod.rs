@@ -8,14 +8,14 @@ use super::JapaneseExt;
 
 /// Represents a single sentence part which either consisting of kana only or kanji and a kana reading
 /// assigned
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SentencePart {
     pub kana: String,
     pub kanji: Option<String>,
 }
 
 /// Same as [`SentencePart`] but with referenced substrings instead of an owned String
-#[derive(Clone)]
+#[derive(Clone, Debug, Copy)]
 pub struct SentencePartRef<'a> {
     pub kana: &'a str,
     pub kanji: Option<&'a str>,
@@ -42,6 +42,57 @@ impl SentencePart {
         } else {
             self.kana.clone()
         }
+    }
+
+    /// Encodes a SentencePartRef to string
+    #[inline]
+    pub fn encoded(&self) -> String {
+        self.as_ref().encoded()
+    }
+
+    /// Returns `true` if SentencePart has kanji reading
+    #[inline]
+    pub fn has_kanji(&self) -> bool {
+        self.as_ref().has_kanji()
+    }
+
+    /// Returns `true` if SentencePart is empty. Since every part has at least to hold kana data
+    /// `empty` is already the case if the kana reading is empmty
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.as_ref().is_empty()
+    }
+
+    #[inline]
+    pub fn as_ref(&self) -> SentencePartRef {
+        SentencePartRef {
+            kana: &self.kana,
+            kanji: self.kanji.as_deref(),
+        }
+    }
+}
+
+impl<'a> SentencePartRef<'a> {
+    /// Encodes a SentencePartRef to string
+    pub fn encoded(&self) -> String {
+        if self.kanji.is_none() {
+            self.kana.to_string()
+        } else {
+            generate::furigana_block(self.kanji.unwrap(), self.kana)
+        }
+    }
+
+    /// Returns `true` if SentencePart has kanji reading
+    #[inline]
+    pub fn has_kanji(&self) -> bool {
+        self.kanji.is_some()
+    }
+
+    /// Returns `true` if SentencePart is empty. Since every part has at least to hold kana data
+    /// `empty` is already the case if the kana reading is empmty
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.kana.trim().is_empty()
     }
 }
 
@@ -84,7 +135,7 @@ pub fn pairs_checked(kanji: &str, kana: &str) -> Option<Vec<SentencePart>> {
 
 /// Parses a furigana string into corresponding SentencePartRef's
 ///
-/// Input format: [拝金主義|はい|きん|しゅ|ぎ]
+/// Input format: `[拝金主義|はい|きん|しゅ|ぎ]`
 ///
 pub fn from_str(input: &str) -> impl Iterator<Item = SentencePartRef<'_>> {
     let mut char_iter = input.char_indices().multipeek();
