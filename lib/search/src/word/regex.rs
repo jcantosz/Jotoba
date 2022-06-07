@@ -1,8 +1,11 @@
+use crate::{
+    engine::{result::SearchResult, result_item::ResultItem, words::native::regex as regex_engine},
+    query::regex::RegexSQuery,
+};
 use error::Error;
+use log::debug;
+use std::time::Instant;
 use types::jotoba::words::Word;
-
-use crate::engine::words::native::regex as regex_engine;
-use crate::{engine::result::SearchResult, regex_query::RegexSQuery};
 
 use super::order::regex_order;
 
@@ -12,22 +15,25 @@ pub fn search(
     limit: u32,
     offset: usize,
 ) -> Result<SearchResult<&'static Word>, Error> {
-    let mut words = regex_engine::search(&query)?
-        .into_iter()
-        .map(|(word, src)| (word, regex_order(word, src, &query)))
-        .collect::<Vec<_>>();
+    let start = Instant::now();
 
-    let len = words.len();
-
-    // Already sort them here so we can take only those to display
-    words.sort_by(|a, b| a.1.cmp(&b.1).reverse());
+    let res = regex_engine::search(
+        &query,
+        |word, reading| regex_order(word, reading, &query),
+        limit as usize + offset,
+    )?;
 
     // Select words to display
-    let words = words
+    let words: Vec<ResultItem<_>> = res
+        .items
         .into_iter()
+        .map(|i| i.into())
+        .rev()
         .skip(offset)
         .take(limit as usize)
         .collect::<Vec<_>>();
 
-    Ok(SearchResult::from_items_ordered(words, len))
+    let res = SearchResult::new(words, res.item_len);
+    debug!("Regex search took: {:?}", start.elapsed());
+    Ok(res)
 }

@@ -11,16 +11,29 @@ use config::Config;
 use log::{debug, warn};
 use std::{path::Path, sync::Arc, time::Instant};
 
+use crate::{check, cli::Options};
+
 /// How long frontend assets are going to be cached by the clients. Currently 1 week
 const ASSET_CACHE_MAX_AGE: u64 = 604800;
 
 /// Start the webserver
-pub(super) async fn start() -> std::io::Result<()> {
+pub(super) async fn start(options: Options) -> std::io::Result<()> {
+    if options.debug {
+        println!("DEBUG MODE ENABLED");
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(1)
+            .build_global()
+            .unwrap();
+    }
+
     setup_logger();
 
     let start = Instant::now();
 
     let config = Config::new(None).expect("config failed");
+    if options.debug {
+        println!("{config:#?}");
+    }
 
     prepare_data(&config);
 
@@ -31,7 +44,13 @@ pub(super) async fn start() -> std::io::Result<()> {
 
     let address = config.server.listen_address.clone();
 
+    if !check::resources() {
+        log::error!("Not all required data found! Exiting");
+        return Ok(());
+    }
+
     debug!("Resource loading took {:?}", start.elapsed());
+    debug_info();
 
     HttpServer::new(move || {
         let app = App::new()
@@ -83,7 +102,7 @@ pub(super) async fn start() -> std::io::Result<()> {
             .service(
                 actixweb::resource("/news")
                     .wrap(Compat::new(middleware::Compress::default()))
-                    .route(actixweb::get().to(frontend::news::news)),
+                    .route(actixweb::get().to(frontend::news_ep::news)),
             )
             .service(
                 actixweb::resource("/help")
@@ -104,13 +123,26 @@ pub(super) async fn start() -> std::io::Result<()> {
                     .default_service(actix_web::Route::new().to(docs))
                     .service(
                         actixweb::scope("app")
-                            .route("kanji", actixweb::post().to(api::app::kanji::search))
-                            .route("names", actixweb::post().to(api::app::names::search))
+                            .route(
+                                "kanji",
+                                actixweb::post().to(api::app::search::kanji::search),
+                            )
+                            .route(
+                                "names",
+                                actixweb::post().to(api::app::search::names::search),
+                            )
                             .route(
                                 "sentences",
-                                actixweb::post().to(api::app::sentences::search),
+                                actixweb::post().to(api::app::search::sentences::search),
                             )
-                            .route("words", actixweb::post().to(api::app::words::search)),
+                            .route(
+                                "words",
+                                actixweb::post().to(api::app::search::words::search),
+                            )
+                            .service(actixweb::scope("details").route(
+                                "word",
+                                actixweb::post().to(api::app::details::word::details),
+                            )),
                     )
                     .service(
                         actixweb::scope("search")
@@ -205,34 +237,41 @@ async fn docs(_req: HttpRequest) -> actix_web::Result<NamedFile> {
     Ok(NamedFile::open("html/docs.html")?)
 }
 
-fn prepare_data(ccf: &Config) {
+pub(crate) fn prepare_data(ccf: &Config) {
     rayon::scope(move |s| {
         let cf = ccf.clone();
         s.spawn(move |_| {
-            load_resources(&cf);
+            log::debug!("Loading Resources");
+            load_resources(&cf.get_storage_data_path());
         });
 
         let cf = ccf.clone();
         s.spawn(move |_| {
+            log::debug!("Loading Suggestions");
             load_suggestions(&cf);
         });
 
         let cf = ccf.clone();
         s.spawn(move |_| {
+            log::debug!("Loading Indexes");
             load_indexes(&cf);
         });
 
-        s.spawn(|_| load_tokenizer());
+        s.spawn(|_| {
+            log::debug!("Loading tokenizer");
+            load_tokenizer()
+        });
 
         let cf = ccf.clone();
         s.spawn(move |_| clean_img_scan_dir(&cf));
 
         let cf = ccf.clone();
         s.spawn(move |_| {
-            if let Err(err) = resources::news::News::init(cf.server.get_news_folder()) {
+            log::debug!("Loading News");
+            if let Err(err) = news::News::init(cf.server.get_news_folder()) {
                 warn!("Failed to load news: {}", err);
             }
-        })
+        });
     });
 }
 
@@ -262,14 +301,14 @@ fn clean_img_scan_dir(config: &Config) {
     std::fs::remove_dir_all(&path).expect("Failed to clear img scan director");
 }
 
-pub fn load_resources(config: &Config) {
-    resources::initialize_resources(
-        config.get_storage_data_path().as_str(),
-        config.get_suggestion_sources(),
-        config.get_radical_map_path().as_str(),
-        config.get_sentences_path().as_str(),
-    )
-    .expect("Failed to load resources");
+fn debug_info() {
+    log::debug!("All features: {:?}", resources::Feature::all());
+    log::debug!("Supported: {:?}", resources::get().get_features());
+    log::debug!("Not supported: {:?}", resources::get().missing_features());
+}
+
+pub fn load_resources(src: &str) {
+    resources::load(src).expect("Failed to load resource storage");
 }
 
 fn load_suggestions(config: &Config) {

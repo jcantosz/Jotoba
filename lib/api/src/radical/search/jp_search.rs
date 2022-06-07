@@ -19,7 +19,7 @@ fn kanji_search(query: &str) -> Vec<char> {
 
     query
         .chars()
-        .filter_map(|kanji| kanji_retr.by_literal(kanji).and_then(|i| i.parts.as_ref()))
+        .filter_map(|kanji| kanji_retr.by_literal(kanji).map(|i| &i.parts))
         .flatten()
         .copied()
         .unique()
@@ -39,7 +39,7 @@ fn kana_search(query: &str) -> Result<Vec<char>, Error> {
     let kanji_retr = resources::get().kanji();
     let res = search_task
         .find()?
-        .item_iter()
+        .into_iter()
         .map(|i| {
             i.get_reading()
                 .reading
@@ -49,7 +49,7 @@ fn kana_search(query: &str) -> Result<Vec<char>, Error> {
         })
         .flatten()
         .unique()
-        .filter_map(|kanji| kanji_retr.by_literal(kanji).and_then(|i| i.parts.as_ref()))
+        .filter_map(|kanji| kanji_retr.by_literal(kanji).map(|i| &i.parts))
         .flatten()
         .unique()
         .copied()

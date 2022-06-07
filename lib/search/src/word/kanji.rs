@@ -8,7 +8,7 @@ use error::Error;
 use itertools::Itertools;
 use japanese::{CharType, JapaneseExt};
 use types::jotoba::{
-    kanji::{self, Kanji, ReadingType},
+    kanji::{self, reading::ReadingType, Kanji},
     words::Word,
 };
 
@@ -57,7 +57,11 @@ fn words_with_kanji_reading(
 
     let literal = kanji.literal.to_string();
     let reading = reading.to_string();
-    let literal_reading = kanji.get_literal_reading(&reading);
+    //let literal_reading = kanji.get_literal_reading(&reading);
+    let literal_reading = kanji
+        .find_reading(&reading)
+        .map(|i| i.get_raw().to_string());
+
     search_task.set_result_filter(move |word| {
         if word.reading.kanji.is_none() {
             return false;
@@ -69,14 +73,17 @@ fn words_with_kanji_reading(
             let kanji_reading = kanji_reading.reading.clone();
 
             let readings = japanese::furigana::generate::retrieve_readings(
-                &mut |i: String| {
+                |i: String| {
                     let retrieve = resources::get().kanji();
                     let kanji = retrieve.by_literal(i.chars().next()?)?;
-                    if kanji.onyomi.is_none() && kanji.kunyomi.is_none() {
+                    if kanji.onyomi.is_empty() && kanji.kunyomi.is_empty() {
                         return None;
                     }
 
-                    Some((kanji.kunyomi.clone(), kanji.onyomi.clone()))
+                    let kun = (!kanji.kunyomi.is_empty()).then(|| kanji.kunyomi.clone());
+                    let on = (!kanji.onyomi.is_empty()).then(|| kanji.onyomi.clone());
+
+                    Some((kun, on))
                 },
                 &kanji_reading,
                 kana,
@@ -111,7 +118,7 @@ fn words_with_kanji_reading(
 
     let res = search_task.find()?;
     let len = res.len();
-    let mut words = res.item_iter().cloned().collect::<Vec<_>>();
+    let mut words = res.into_iter().cloned().collect::<Vec<_>>();
 
     super::filter_languages(
         words.iter_mut(),

@@ -8,7 +8,7 @@ use autocompletion::{
 };
 use romaji::RomajiExt;
 
-use super::super::*;
+use super::{super::*, kana_end_ext::KanaEndExtension};
 
 const MAX_SENTENCE_LEN: usize = 10;
 
@@ -18,7 +18,6 @@ pub fn suggestions(query: &Query, radicals: &[char]) -> Option<Vec<WordPair>> {
     let query_str = query.query.as_str();
 
     let mut suggestion_task = SuggestionTask::new(30);
-
     let mut main_sugg_query = SuggestionQuery::new(jp_engine, query_str);
 
     // Kanji reading align (くにうた ー＞ 国歌)
@@ -26,6 +25,12 @@ pub fn suggestions(query: &Query, radicals: &[char]) -> Option<Vec<WordPair>> {
     k_r_align.options.weights.freq_weight = 1.0;
     k_r_align.options.threshold = 5;
     main_sugg_query.add_extension(k_r_align);
+
+    // Find 天気予報 even if 天気よほう was written
+    let mut kana_end_ext = KanaEndExtension::new(jp_engine, 10);
+    kana_end_ext.options.weights.freq_weight = 0.3;
+    kana_end_ext.options.weights.total_weight = 0.1;
+    main_sugg_query.add_extension(kana_end_ext);
 
     // Similar terms
     let mut ste = SimilarTermsExtension::new(jp_engine, 7);
@@ -79,7 +84,10 @@ pub fn suggestions(query: &Query, radicals: &[char]) -> Option<Vec<WordPair>> {
             return true;
         }
 
-        let word = word_res.by_sequence(item.word_id()).unwrap();
+        let word = match word_res.by_sequence(item.word_id()) {
+            Some(word) => word,
+            None => return true,
+        };
         word_rad_filter(query_str, word, radicals)
     });
 
@@ -126,8 +134,8 @@ fn word_rad_filter(query: &str, word: &types::jotoba::words::Word, radicals: &[c
         .filter(|i| !query_kanji.contains(&i))
         .filter_map(|k| k.is_kanji().then(|| retrieve.by_literal(k)).flatten())
         .any(|k| {
-            if let Some(k_parts) = &k.parts {
-                return is_subset(radicals, &k_parts);
+            if !k.parts.is_empty() {
+                return is_subset(radicals, &k.parts);
             }
             false
         })

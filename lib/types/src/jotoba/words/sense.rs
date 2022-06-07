@@ -7,6 +7,7 @@ use super::{
     gtype::GType,
     misc::Misc,
     part_of_speech::{PartOfSpeech, PosSimple},
+    Word,
 };
 use serde::{Deserialize, Serialize};
 
@@ -44,9 +45,23 @@ impl Eq for Sense {}
 /// translated language.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, Hash)]
 pub struct Gloss {
+    pub id: u8,
     pub gloss: String,
     pub g_type: Option<GType>,
-    pub occurrence: u32,
+}
+
+/// Converts sense and gloss id to a single u16
+#[inline]
+pub fn to_unique_id(sense_id: u8, gloss_id: u8) -> u16 {
+    (sense_id as u16) << 8 | gloss_id as u16
+}
+
+/// Converts u16 to seq and gloss id
+#[inline]
+pub fn from_unique_id(id: u16) -> (u8, u8) {
+    let gloss_id = id as u8;
+    let sense_id = (id >> 8) as u8;
+    (sense_id, gloss_id)
 }
 
 impl Sense {
@@ -68,6 +83,11 @@ impl Sense {
 // Jotoba intern only features
 #[cfg(feature = "jotoba_intern")]
 impl Sense {
+    #[inline]
+    pub fn gloss_by_id(&self, id: u8) -> Option<&Gloss> {
+        self.glosses.iter().find(|i| i.id == id)
+    }
+
     /// Get a senses tags prettified
     #[inline]
     pub fn get_glosses(&self) -> String {
@@ -158,6 +178,112 @@ impl Sense {
             Some(format!("{}.", res.iter().join(", ")))
         } else {
             Some(res.iter().join(", "))
+        }
+    }
+}
+
+/// Iterator over all Senses and its glosses
+pub struct SenseGlossIter<'a> {
+    word: &'a Word,
+    sense_pos: usize,
+    gloss_pos: usize,
+}
+
+impl<'a> SenseGlossIter<'a> {
+    #[inline]
+    pub(super) fn new(word: &'a Word) -> Self {
+        SenseGlossIter {
+            word,
+            sense_pos: 0,
+            gloss_pos: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for SenseGlossIter<'a> {
+    type Item = (&'a Sense, &'a Gloss);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let senses = &self.word.senses;
+        if senses.len() <= self.sense_pos {
+            return None;
+        }
+
+        let sense = &senses[self.sense_pos];
+        assert!(!sense.glosses.is_empty());
+        let gloss = &sense.glosses[self.gloss_pos];
+
+        self.gloss_pos += 1;
+        if self.gloss_pos >= sense.glosses.len() {
+            self.gloss_pos = 0;
+            self.sense_pos += 1;
+        }
+
+        Some((sense, gloss))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn make_gloss(word: &str) -> Gloss {
+        Gloss {
+            gloss: word.to_string(),
+            ..Default::default()
+        }
+    }
+
+    fn make_word(senses: &[&[&str]]) -> Word {
+        let built_senses = senses
+            .iter()
+            .map(|sense| Sense {
+                glosses: sense.iter().map(|i| make_gloss(i)).collect(),
+                ..Default::default()
+            })
+            .collect::<Vec<_>>();
+
+        Word {
+            senses: built_senses,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_sense_gloss_iter() {
+        let word_empty = make_word(&[]);
+        assert_eq!(word_empty.sense_gloss_iter().next(), None);
+
+        let test_word = |data: &[&[&str]]| {
+            let word1 = make_word(data);
+            let mut iter1 = word1.sense_gloss_iter();
+
+            for i in data.into_iter().map(|i| i.iter()).flatten() {
+                assert_eq!(iter1.next().unwrap().1.gloss.as_str(), *i);
+            }
+            assert_eq!(iter1.next(), None);
+        };
+
+        let words = vec![
+            vec![&["gloss0_0"][..]],
+            vec![&["gloss0_0"][..], &["gloss1_0"][..]],
+            vec![&["gloss0_0", "gloss0_1"][..], &["gloss1_0", "gloss1_1"][..]],
+        ];
+
+        for word in words {
+            test_word(&word);
+        }
+    }
+
+    #[test]
+    fn test_unique_id() {
+        let pairs = &[(1, 70), (10, 6), (0, 0), (255, 255), (1, 2)];
+
+        for (seq, gloss) in pairs {
+            let enc = to_unique_id(*seq, *gloss);
+            let (seq_res, gloss_res) = from_unique_id(enc);
+            assert_eq!(*seq, seq_res);
+            assert_eq!(*gloss, gloss_res);
         }
     }
 }

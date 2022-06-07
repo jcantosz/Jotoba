@@ -7,59 +7,45 @@ pub mod inflection;
 pub mod information;
 pub mod misc;
 pub mod part_of_speech;
+pub mod pitch;
 pub mod priority;
 pub mod sense;
 
 pub use dict::Dict;
 
-use bitflags::BitFlag;
-
-#[cfg(feature = "jotoba_intern")]
-use japanese::{
-    accent::{AccentChar, Border},
-    furigana::{self, SentencePartRef},
-    JapaneseExt,
-};
-use serde::{Deserialize, Serialize};
-
 use self::{
     inflection::Inflections,
     misc::Misc,
     part_of_speech::{PartOfSpeech, PosSimple},
+    pitch::{raw_data::PitchValues, Pitch},
     priority::Priority,
-    sense::Sense,
+    sense::{Sense, SenseGlossIter},
+};
+use super::languages::Language;
+use bitflags::BitFlag;
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "jotoba_intern")]
+use japanese::{
+    furigana::{self, SentencePartRef},
+    JapaneseExt,
 };
 
-use super::languages::Language;
-
 /// A single word item
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Eq)]
+#[derive(Clone, Default, Serialize, Deserialize, Eq)]
 pub struct Word {
     pub sequence: u32,
     pub priorities: Option<Vec<Priority>>,
     pub reading: Reading,
     pub senses: Vec<Sense>,
-    pub accents: Option<Vec<u8>>,
     pub furigana: Option<String>,
     pub jlpt_lvl: Option<u8>,
     pub collocations: Option<Vec<u32>>,
     pub transive_verion: Option<u32>,
     pub intransive_verion: Option<u32>,
     pub sentences_available: u16,
-}
-
-impl std::hash::Hash for Word {
-    #[inline]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.sequence.hash(state);
-    }
-}
-
-impl PartialEq for Word {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        self.sequence == other.sequence
-    }
+    pub accents: PitchValues,
 }
 
 /// Various readings of a word
@@ -74,7 +60,8 @@ impl Word {
     /// Returns true if a word is common
     #[inline]
     pub fn is_common(&self) -> bool {
-        self.reading.get_reading().priorities.is_some()
+        //self.reading.get_reading().priorities.is_some()
+        self.reading_iter(true).any(|i| i.priorities.is_some())
     }
 
     /// Returns the jlpt level of a word. `None` if a word doesn't have a JLPT lvl assigned
@@ -89,17 +76,19 @@ impl Word {
         self.reading.get_reading()
     }
 
+    /// Returns an iterator over all sense and its glosses
+    #[inline]
+    pub fn sense_gloss_iter(&self) -> SenseGlossIter {
+        SenseGlossIter::new(&self)
+    }
+
     /// Return all senses of a language
     #[inline]
-    pub fn senses_by_lang(&self, language: Language) -> Option<Vec<Sense>> {
-        let senses = self
-            .senses
+    pub fn senses_by_lang(&self, language: Language) -> Vec<&Sense> {
+        self.senses
             .iter()
             .filter(|i| i.language == language)
-            .cloned()
-            .collect();
-
-        to_option(senses)
+            .collect()
     }
 
     /// Get senses ordered by language (non-english first)
@@ -126,6 +115,19 @@ impl Word {
             .partition(|i| i.language == Language::English);
 
         vec![other, english]
+    }
+
+    #[inline]
+    pub fn sense_by_id(&self, id: u8) -> Option<&Sense> {
+        self.senses.get(id as usize)
+    }
+
+    #[inline]
+    pub fn get_sense_gloss(&self, id: u16) -> Option<(&Sense, &sense::Gloss)> {
+        let (sense_id, gloss_id) = sense::from_unique_id(id);
+        let sense = self.sense_by_id(sense_id)?;
+        let gloss = sense.gloss_by_id(gloss_id)?;
+        Some((sense, gloss))
     }
 
     /// Get amount of tags which will be displayed below the reading
@@ -194,6 +196,18 @@ impl Word {
         self.reading_iter(true).any(|j| j.reading == reading)
     }
 
+    /// Returns `true` if `word` has `reading` as main (main kanji or kana reading)
+    #[inline]
+    pub fn has_main_reading(&self, reading: &str) -> bool {
+        self.reading.kana.reading == reading
+            || self
+                .reading
+                .kanji
+                .as_ref()
+                .map(|i| i.reading == reading)
+                .unwrap_or(false)
+    }
+
     /// Returns an iterator over all parts of speech of a word
     #[inline]
     fn get_pos(&self) -> impl Iterator<Item = &PartOfSpeech> {
@@ -227,37 +241,25 @@ impl Word {
         })
     }
 
+    #[inline]
+    pub fn get_kana(&self) -> &str {
+        &self.reading.kana.reading
+    }
+
     /// Returns a renderable vec of accents with kana characters
-    pub fn get_accents(&self) -> Option<Vec<AccentChar>> {
-        let accents_raw = self.accents.as_ref()?;
-        let kana = &self.reading.kana;
-        let accents = japanese::accent::calc_pitch(&kana.reading, accents_raw[0] as i32)?;
-        let accent_iter = accents.iter().peekable().enumerate();
+    #[inline]
+    pub fn get_pitches(&self) -> Vec<Pitch> {
+        self.accents
+            .iter()
+            .filter_map(|drop| Pitch::new(self.get_kana(), drop))
+            .collect()
+    }
 
-        let res = accent_iter
-            .map(|(pos, (part, is_high))| {
-                if part.is_empty() {
-                    // Don't render under/overline for empty character -- handles the case where the
-                    // pitch changes from the end of the word to the particle
-                    return vec![];
-                }
-                let borders = vec![if *is_high {
-                    Border::Top
-                } else {
-                    Border::Bottom
-                }];
-                let borders = if pos != accents.len() - 1 {
-                    borders.into_iter().chain(vec![Border::Right]).collect()
-                } else {
-                    borders
-                };
-                vec![AccentChar { borders, c: part }]
-            })
-            .flatten()
-            .into_iter()
-            .collect();
-
-        Some(res)
+    /// Returns a renderable vec of accents with kana characters
+    #[inline]
+    pub fn get_first_pitch(&self) -> Option<Pitch> {
+        let drop = self.accents.get(0)?;
+        Pitch::new(self.get_kana(), drop)
     }
 
     /// Returns furigana reading-pairs of an Item
@@ -270,7 +272,6 @@ impl Word {
     /// Get alternative readings in a beautified, print-ready format
     #[inline]
     pub fn alt_readings_beautified(&self) -> String {
-        use itertools::Itertools;
         self.reading
             .alternative
             .iter()
@@ -291,7 +292,6 @@ impl Word {
     }
 
     fn pretty_print_senses(senses: &[Sense]) -> String {
-        use itertools::Itertools;
         senses
             .iter()
             .map(|i| i.glosses.clone())
@@ -365,6 +365,13 @@ impl<'a> Iterator for ReadingIter<'a> {
     }
 }
 
+#[cfg(feature = "jotoba_intern")]
+#[inline]
+pub fn adjust_language(word: &mut Word, language: Language, show_english: bool) {
+    word.senses
+        .retain(|j| j.language == language || (j.language == Language::English && show_english));
+}
+
 /// Removes all senses which ain't in the provided language or english in case `show_english` is
 /// `true`
 #[cfg(feature = "jotoba_intern")]
@@ -374,14 +381,39 @@ pub fn filter_languages<'a, I: 'a + Iterator<Item = &'a mut Word>>(
     show_english: bool,
 ) {
     for word in iter {
-        word.senses.retain(|j| {
-            j.language == language || (j.language == Language::English && show_english)
-        });
+        adjust_language(word, language, show_english);
     }
 }
 
-/// Returns `None` if the vec is empty or Some(Vec<T>) if not
-#[inline]
-fn to_option<T>(vec: Vec<T>) -> Option<Vec<T>> {
-    (!vec.is_empty()).then(|| vec)
+impl std::hash::Hash for Word {
+    #[inline]
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.sequence.hash(state);
+    }
+}
+
+impl PartialEq for Word {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.sequence == other.sequence
+    }
+}
+
+impl std::fmt::Debug for Word {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let senses = self
+            .senses_by_lang(Language::English)
+            .into_iter()
+            .map(|i| i.glosses.iter().map(|i| &i.gloss).join("|"))
+            .join("\n");
+
+        f.debug_struct("Word")
+            .field("Seq", &self.sequence)
+            .field("Kana", &self.reading.kana.reading)
+            .field("Reading", &self.get_reading().reading)
+            .field("Common", &self.is_common())
+            .field("JLPT", &self.jlpt_lvl)
+            .field("Translations", &senses)
+            .finish()
+    }
 }

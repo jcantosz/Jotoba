@@ -1,5 +1,8 @@
 use autocompletion::suggest::{
-    extension::{longest_prefix::LongestPrefixExtension, similar_terms::SimilarTermsExtension},
+    extension::{
+        kanji_align::KanjiAlignExtension, longest_prefix::LongestPrefixExtension,
+        similar_terms::SimilarTermsExtension,
+    },
     query::SuggestionQuery,
     task::SuggestionTask,
 };
@@ -10,9 +13,13 @@ use utils::real_string_len;
 use super::super::*;
 
 /// Returns suggestions based on non japanese input
-pub async fn suggestions(query: &Query, query_str: &str) -> Option<Vec<WordPair>> {
-    let query_lower = query_str.to_lowercase();
+pub fn suggestions(query: &Query, query_str: &str) -> Option<Vec<WordPair>> {
+    let query_lower = autocompletion::index::basic::basic_format(query_str.trim());
     let mut task = SuggestionTask::new(30);
+
+    //println!("raw: {:?}", query_lower.trim());
+
+    // Raw
 
     // Default search query
     task.add_query(new_suggestion_query(
@@ -29,14 +36,33 @@ pub async fn suggestions(query: &Query, query_str: &str) -> Option<Vec<WordPair>
     }
 
     // Romaji result
-    if let Some(hira_query) = try_romaji(query_str) {
+    if let Some(hira_query) = try_romaji(query_str.trim()) {
         if let Some(jp_engine) = storage::JP_WORD_INDEX.get() {
             let mut query = SuggestionQuery::new(jp_engine, hira_query);
             query.weights.total_weight = 0.5;
+            /*
+            query.weights.freq_weight = 0.1;
+            query.weights.str_weight = 1.9;
+            */
+
+            let mut k_r_align = KanjiAlignExtension::new(jp_engine);
+            k_r_align.options.weights.freq_weight = 1.0;
+            k_r_align.options.threshold = 5;
+            query.add_extension(k_r_align);
 
             let mut similar_terms = SimilarTermsExtension::new(jp_engine, 5);
-            similar_terms.options.weights.total_weight = 0.4;
+            similar_terms.options.weights.total_weight = 0.005;
+            similar_terms.options.threshold = 10;
             query.add_extension(similar_terms);
+
+            task.set_rel_mod(|i, rel| {
+                let out = i.to_output();
+                let kana = &out.primary;
+                if japanese::romaji_prefix(query_str.trim(), &kana) {
+                    return rel + 1000;
+                }
+                rel
+            });
 
             task.add_query(query);
         }
@@ -53,23 +79,29 @@ fn new_suggestion_query(query: &str, lang: Language) -> Option<SuggestionQuery> 
     suggestion_query.weights.freq_weight = 0.5;
 
     let mut ste = SimilarTermsExtension::new(engine, 5);
-    ste.options.threshold = 20;
-    ste.options.weights.freq_weight = 0.1;
-    ste.options.weights.str_weight = 1.9;
-    ste.options.weights.total_weight = 0.5;
+    ste.options.threshold = 10;
+    ste.options.weights.freq_weight = 1.0;
+    ste.options.weights.str_weight = 1.0;
+    ste.options.weights.total_weight = 0.05;
     //suggestion_query.add_extension(ste);
 
-    let mut lpe = LongestPrefixExtension::new(engine, 4, 10);
+    let mut lpe = LongestPrefixExtension::new(engine, 3, 10);
     lpe.options.threshold = 10;
-    lpe.options.weights.freq_weight = 0.4;
-    lpe.options.weights.total_weight = 0.5;
+    lpe.options.weights.freq_weight = 1.0;
+    lpe.options.weights.total_weight = 0.3;
     //suggestion_query.add_extension(lpe);
 
     Some(suggestion_query)
 }
 
 /// Returns Some(String) if `query_str` could be (part of) romaji search input and None if not
-fn try_romaji(query_str: &str) -> Option<String> {
+pub(crate) fn try_romaji(query_str: &str) -> Option<String> {
+    let mut query_str = query_str.replace("-", "ー");
+    if query_str.ends_with("m") {
+        query_str.pop();
+    }
+    let query_str = &query_str;
+
     let str_len = real_string_len(query_str);
     if str_len < 3 || query_str.contains(' ') {
         return None;
@@ -79,13 +111,13 @@ fn try_romaji(query_str: &str) -> Option<String> {
         return Some(v.to_hiragana());
     }
 
-    if str_len < 4 {
+    if str_len < 3 {
         return None;
     }
 
     // 'n' is the only hiragana with with=1 in romaji so allow them
     // to be treated properly too
-    let min_len = 4 - query_str.chars().filter(|i| *i == 'n').count();
+    let min_len = 3 - query_str.chars().filter(|i| *i == 'n').count();
 
     // Strip one to avoid switching between romaji/normal results
     if str_len > min_len {

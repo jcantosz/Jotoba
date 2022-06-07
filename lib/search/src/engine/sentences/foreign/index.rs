@@ -8,7 +8,7 @@ use types::jotoba::languages::Language;
 use crate::engine::{document::SentenceDocument, metadata::Metadata};
 
 // Shortcut for type of index
-pub(super) type Index = vector_space_model::Index<SentenceDocument, Metadata>;
+pub(super) type Index = vector_space_model2::Index<SentenceDocument, Metadata>;
 
 // In-memory storage for foreign name index
 pub(super) static INDEXES: OnceCell<HashMap<Language, Index>> = OnceCell::new();
@@ -55,7 +55,7 @@ pub(crate) fn load(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
 
 /// Returns the loaded foreign name index
 #[inline]
-pub(crate) fn get(lang: Language) -> Option<&'static Index> {
+pub fn get(lang: Language) -> Option<&'static Index> {
     // Safety:
     // We don't write to `INDEX` after loading it one time at the startup. Jotoba panics if it
     // can't load this index, so until a `get()` call gets reached, `INDEX` is always set to a

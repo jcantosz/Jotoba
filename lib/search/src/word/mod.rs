@@ -4,14 +4,16 @@ mod regex;
 pub mod result;
 pub mod tag_only;
 
-use std::time::Instant;
-
 use crate::{
     engine::{
         self,
         guess::Guess,
         result::SearchResult,
-        words::{foreign, native},
+        result_item::ResultItem,
+        words::{
+            foreign::{self, output::WordOutput},
+            native,
+        },
         SearchTask,
     },
     query::Form,
@@ -40,10 +42,7 @@ pub struct Search<'a> {
 /// Search among all data based on the input query
 #[inline]
 pub fn search(query: &Query) -> Result<WordResult, Error> {
-    //let start = Instant::now();
-    let res = Search { query }.do_search();
-    //println!("Search took {:?}", start.elapsed());
-    res
+    Search { query }.do_search()
 }
 
 #[derive(Default)]
@@ -111,12 +110,13 @@ impl<'a> Search<'a> {
     fn parse_sentence<'b>(
         &'b self,
         query_str: &'a str,
+        allow_sentence: bool,
     ) -> (
         String,
         Option<sentence_reader::Sentence>,
         Option<sentence_reader::Part>,
     ) {
-        if !self.query.parse_japanese {
+        if !self.query.parse_japanese || !allow_sentence {
             return (query_str.to_owned(), None, None);
         }
 
@@ -172,6 +172,7 @@ impl<'a> Search<'a> {
     fn native_search(
         &self,
         query_str: &str,
+        allow_sentence: bool,
     ) -> Result<
         (
             SearchResult<&'static Word>,
@@ -198,7 +199,7 @@ impl<'a> Search<'a> {
             }
         }
 
-        let (query, mut sentence, word_info) = self.parse_sentence(query_str);
+        let (query, mut sentence, word_info) = self.parse_sentence(query_str, allow_sentence);
 
         let original_query = if sentence.is_some() {
             word_info.as_ref().unwrap().get_inflected().clone()
@@ -214,7 +215,7 @@ impl<'a> Search<'a> {
         }
 
         // If query was modified (ie. through reflection), search for original too
-        if query != query_str {
+        if query != query_str && sentence.is_none() {
             search_task.add_query(&self.query.query);
         }
 
@@ -242,7 +243,7 @@ impl<'a> Search<'a> {
 
     /// Perform a native word search
     fn native_results(&self, query_str: &str) -> Result<ResultData, Error> {
-        let (res, infl_info, sentence, searched_query) = match self.native_search(query_str) {
+        let (res, infl_info, sentence, searched_query) = match self.native_search(query_str, true) {
             Ok(v) => v,
             Err(err) => match err {
                 Error::NotFound => return Ok(ResultData::default()),
@@ -252,7 +253,7 @@ impl<'a> Search<'a> {
 
         let count = res.len();
 
-        let mut wordresults = res.item_iter().cloned().collect::<Vec<_>>();
+        let mut wordresults = res.into_iter().cloned().collect::<Vec<_>>();
 
         filter_languages(
             wordresults.iter_mut(),
@@ -280,7 +281,7 @@ impl<'a> Search<'a> {
             SearchTask::with_language(&self.query.query, used_lang)
                 .limit(self.query.settings.page_size as usize)
                 .offset(self.query.page_offset)
-                .threshold(0.3f32);
+                .threshold(0.4f32);
 
         //println!("searching in {}", used_lang);
 
@@ -294,11 +295,14 @@ impl<'a> Search<'a> {
         // Set user defined filter
         let pos_filter = to_option(self.query.get_part_of_speech_tags().copied().collect());
         let q_cloned = self.query.clone();
-        search_task.set_result_filter(move |word| Self::word_filter(&q_cloned, word, &pos_filter));
+        search_task
+            .set_result_filter(move |word| Self::word_filter(&q_cloned, &word.word, &pos_filter));
 
         // Set order function
+        let orderer = order::foreign::ForeignOrder::new();
         search_task.set_order_fn(move |word, relevance, query, language| {
-            order::foreign_search_order(word, relevance, query, language.unwrap(), used_lang)
+            //order::foreign_search_order(word, relevance, query, language.unwrap(), used_lang)
+            orderer.score(word, relevance, query, language.unwrap(), used_lang)
         });
 
         search_task
@@ -327,7 +331,7 @@ impl<'a> Search<'a> {
 
         // Do the search
         let mut res = search_task.find()?;
-        let count = res.len();
+        let mut count = res.len();
 
         let mut infl_info = None;
         let mut sentence = None;
@@ -336,27 +340,43 @@ impl<'a> Search<'a> {
             && count < 50
             && could_be_romaji
             && !SearchTask::<foreign::Engine>::with_language(
-                &self.query.query,
+                &self.query.query.to_lowercase(),
                 self.query.get_lang_with_override(),
             )
             .has_term()
         {
             let hg_query = utils::format_romaji_nn(&self.query.query).to_hiragana();
-            let hg_search = self.native_search(&hg_query);
+            let hg_search = self.native_search(&hg_query, false);
             if let Ok((native_res, inflection_info, sent, sq)) = hg_search {
                 infl_info = inflection_info;
                 sentence = sent;
                 searched_query = sq;
-                res.merge(native_res);
+                // hacky but works (I guess)
+                res.total_items += native_res.total_items;
+                count = res.len();
+                let other = native_res.into_inner().into_iter().map(|i| {
+                    let word = i.item;
+                    let relevance = i.relevance;
+                    let language = i.language;
+                    ResultItem::new_raw(WordOutput::new(word, vec![]), relevance, language)
+                });
+                res.merge(other);
             }
         }
 
         // If there aren't any results, check if there is another language
-        if res.len() == 0 {
+        if count == 0 {
             return self.check_other_lang();
         }
 
-        let mut wordresults = res.item_iter().cloned().collect::<Vec<_>>();
+        /*
+        println!("----------\n+++++++++++++++++++++++\n==============");
+        for i in res.iter() {
+            println!("{:?}: {}", i.item.word.get_reading().reading, i.relevance);
+        }
+        */
+
+        let mut wordresults = res.into_iter().map(|i| i.word.clone()).collect::<Vec<_>>();
 
         filter_languages(
             wordresults.iter_mut(),
@@ -510,7 +530,7 @@ pub fn guess_result(query: &Query) -> Option<Guess> {
 }
 
 fn guess_native(search: Search) -> Option<Guess> {
-    let (query, sentence, _) = search.parse_sentence(&search.query.query);
+    let (query, sentence, _) = search.parse_sentence(&search.query.query, false);
     search
         .native_search_task(&query, &search.query.query, sentence.is_some())
         .estimate_result_count()
@@ -518,5 +538,7 @@ fn guess_native(search: Search) -> Option<Guess> {
 }
 
 fn guess_foreign(search: Search) -> Option<Guess> {
-    search.gloss_search_task().estimate_result_count().ok()
+    let mut task = search.gloss_search_task();
+    task.set_align(false);
+    task.estimate_result_count().ok()
 }

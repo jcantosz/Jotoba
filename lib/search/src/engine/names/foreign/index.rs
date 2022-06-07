@@ -4,12 +4,10 @@ use bktree::BkTree;
 use config::Config;
 use log::info;
 use once_cell::sync::OnceCell;
-use vector_space_model::DefaultMetadata;
-
-use crate::engine::document::MultiDocument;
+use vector_space_model2::DefaultMetadata;
 
 // Shortcut for type of index
-pub(super) type Index = vector_space_model::Index<MultiDocument, DefaultMetadata>;
+pub(super) type Index = vector_space_model2::Index<Vec<u32>, DefaultMetadata>;
 
 // In-memory storage for foreign name index
 pub(super) static INDEX: OnceCell<Index> = OnceCell::new();
@@ -40,7 +38,7 @@ pub fn load_term_treepath(config: &Config) {
 
 /// Returns the loaded foreign name index
 #[inline]
-pub(crate) fn get() -> &'static Index {
+pub fn get() -> &'static Index {
     // Safety:
     // We don't write to `INDEX` after loading it one time at the startup. Jotoba panics if it
     // can't load this index, so until a `get()` call gets reached, `INDEX` is always set to a

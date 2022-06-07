@@ -7,32 +7,36 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-japanese = { path = "../japanese"}
+japanese = { path = "../japanese" }
 config = { path = "../config" }
-sentence_reader  = { path = "../sentence_reader", features = ["jotoba_intern"] }
+sentence_reader = { path = "../sentence_reader", features = ["jotoba_intern"] }
 error = { path = "../error" }
 utils = { path = "../utils" }
+indexes = { path = "../indexes" }
 localization = { path = "../localization" }
-resources = { path = "../resources"}
-serde = "1.0.136"
-log = "0.4.16"
+resources = { path = "../resources" }
+types = { path = "../types", default-features = false, features = [
+  "jotoba_intern",
+] }
+serde = "1.0.137"
+log = "0.4.17"
 itertools = "0.10.3"
-futures = "0.3.21"
-once_cell = "1.10.0"
+once_cell = "1.12.0"
 levenshtein = "1.0.5"
-strsim = "0.10.0"
-eudex = { git = "https://github.com/JojiiOfficial/eudex"}
-regex = "1.5.5"
-#vector_space_model = { path = "../../../vector_space_model"}
-vector_space_model = { git = "https://github.com/JojiiOfficial/VectorSpaceModel" }
+regex = "1.5.6"
+#vector_space_model2 = { path = "../../../VectorSpaceModel" }
+vector_space_model2 = { git = "https://github.com/JojiiOfficial/VectorSpaceModel" }
 byteorder = "1.4.3"
 tinysegmenter = "0.1.1"
-bitflags = {git = "https://github.com/JojiiOfficial/BitFlags"}
-bktree = { git = "https://github.com/JojiiOfficial/bktree"}
+bitflags = { git = "https://github.com/JojiiOfficial/BitFlags" }
+bktree = { git = "https://github.com/JojiiOfficial/bktree" }
 bincode = "1.3.3"
 percent-encoding = "2.1.0"
-rayon = "1.5.1"
-types = { path = "../types" , default-features = false, features = ["jotoba_intern"]}
-
-[features]
-default = []
+rayon = "1.5.3"
+priority_container = "0.1.0"
+#priority_container = {path = "../../../priority_container"}
+order_struct = { git = "https://github.com/JojiiOfficial/OrderStruct" }
+spin = { version = "0.9.3", default-features = false, features = [
+  "spin_mutex",
+] }
+intmap = { git = "https://github.com/JojiiOfficial/rust-intmap" }

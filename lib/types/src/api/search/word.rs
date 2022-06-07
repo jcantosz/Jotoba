@@ -2,7 +2,10 @@ use crate::{
     api::search::kanji::Kanji,
     jotoba::{
         languages::Language,
-        words::{dialect::Dialect, field::Field, misc::Misc, part_of_speech::PartOfSpeech},
+        words::{
+            dialect::Dialect, field::Field, misc::Misc, part_of_speech::PartOfSpeech,
+            pitch::PitchPart,
+        },
     },
 };
 
@@ -26,13 +29,7 @@ pub struct Word {
     #[serde(skip_serializing_if = "Option::is_none")]
     audio: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pitch: Option<Vec<PitchItem>>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct PitchItem {
-    part: String,
-    high: bool,
+    pitch: Option<Vec<PitchPart>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -97,10 +94,7 @@ impl From<&crate::jotoba::words::Word> for Word {
 
         let senses = word.senses.iter().map(|i| Sense::from(i)).collect();
 
-        let pitch = word.accents.as_ref().and_then(|accents| {
-            japanese::accent::calc_pitch(&word.reading.kana.reading, accents[0] as i32)
-                .map(|i| i.into_iter().map(|j| j.into()).collect::<Vec<PitchItem>>())
-        });
+        let pitch = word.get_first_pitch().map(|i| i.parts.clone());
 
         Self {
             common: word.is_common(),
@@ -151,15 +145,4 @@ fn convert_kanji(wres: Vec<&crate::jotoba::kanji::Kanji>) -> Vec<Kanji> {
 #[inline]
 fn convert_words(wres: Vec<&crate::jotoba::words::Word>) -> Vec<Word> {
     wres.into_iter().map(|i| i.into()).collect()
-}
-
-#[cfg(feature = "jotoba_intern")]
-impl From<(&str, bool)> for PitchItem {
-    #[inline]
-    fn from((part, high): (&str, bool)) -> Self {
-        Self {
-            part: part.to_owned(),
-            high,
-        }
-    }
 }

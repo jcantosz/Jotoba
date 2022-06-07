@@ -463,7 +463,7 @@ msgstr ""
 msgid "Enable Quick-Copy"
 msgstr ""
 
-msgid "Accept Cookies"
+msgid "Share usage statistics"
 msgstr ""
 
 # Cookie text
@@ -764,6 +764,9 @@ msgid "Chinese reading"
 msgstr ""
 
 msgid "Korean reading"
+msgstr ""
+
+msgid "Vietnamese reading"
 msgstr ""
 
 msgid "Japanese names"
@@ -1084,13 +1087,16 @@ msgid "Word tokenization is done using a project from Hideki Yamane and used for
 msgstr ""
 
 #Source
-msgid "Pitch Accents and Radicals"
+msgid "Pitch accents"
 msgstr ""
 
-msgid "Data about Pitch Accents and Radicals used in specific Kanji are provided by Kanjium"
+msgid "Data about Radicals used in specific Kanji are provided by Kanjium."
 msgstr ""
 
 msgid "On the project's Github Page you can find lots of data about Kanji."
+msgstr ""
+
+msgid "Pitch accent data has been extracted from UniDic."
 msgstr ""
 
 ## Jmdict

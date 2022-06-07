@@ -31,18 +31,21 @@ fn word_search(query: &str, language: Language) -> Result<Vec<char>, Error> {
             .limit(3)
             .threshold(0.8f32);
 
+    let foreign_order = search::word::order::foreign::ForeignOrder::new();
     search_task.set_order_fn(move |word, rel, q_str, lang| {
-        search::word::order::foreign_search_order(word, rel, q_str, lang.unwrap(), language)
+        //search::word::order::foreign::(word, rel, q_str, lang.unwrap(), language)
+        foreign_order.score(word, rel, q_str, lang.unwrap(), language)
     });
 
     let kanji_retr = resources::get().kanji();
     let res = search_task
         .find()?
-        .item_iter()
-        .filter(|word| word.get_reading().reading == query)
+        .into_iter()
+        .filter(|word| word.word.get_reading().reading == query)
         .map(|i| {
-            println!("{}", i.get_reading().reading);
-            i.get_reading()
+            println!("{}", i.word.get_reading().reading);
+            i.word
+                .get_reading()
                 .reading
                 .chars()
                 .filter(|i| i.is_kanji())
@@ -50,7 +53,7 @@ fn word_search(query: &str, language: Language) -> Result<Vec<char>, Error> {
         })
         .flatten()
         .unique()
-        .filter_map(|kanji| kanji_retr.by_literal(kanji).and_then(|i| i.parts.as_ref()))
+        .filter_map(|kanji| kanji_retr.by_literal(kanji).map(|i| &i.parts))
         .flatten()
         .unique()
         .copied()

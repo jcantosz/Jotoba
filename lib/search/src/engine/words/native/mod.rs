@@ -2,62 +2,56 @@ pub mod index;
 pub mod regex;
 pub mod regex_index;
 
-use crate::engine::{document::SingleDocument, simple_gen_doc::GenDoc, Indexable, SearchEngine};
-use resources::models::storage::ResourceStorage;
+use crate::engine::{Indexable, SearchEngine};
+use resources::storage::ResourceStorage;
 use types::jotoba::languages::Language;
 use types::jotoba::words::Word;
-use vector_space_model::{DefaultMetadata, DocumentVector};
+use vector_space_model2::{DefaultMetadata, Vector};
 
 pub struct Engine {}
 
 impl Indexable for Engine {
     type Metadata = DefaultMetadata;
-    type Document = SingleDocument;
+    type Document = u32;
 
     #[inline]
     fn get_index(
         _language: Option<Language>,
-    ) -> Option<&'static vector_space_model::Index<Self::Document, Self::Metadata>> {
+    ) -> Option<&'static vector_space_model2::Index<Self::Document, Self::Metadata>> {
         Some(index::get())
     }
 }
 
 impl SearchEngine for Engine {
-    type GenDoc = GenDoc;
-    type Output = Word;
+    type Output = &'static Word;
 
     #[inline]
     fn doc_to_output<'a>(
         storage: &'static ResourceStorage,
         inp: &Self::Document,
-    ) -> Option<Vec<&'static Self::Output>> {
-        storage.words().by_sequence(inp.seq_id).map(|i| vec![i])
+    ) -> Option<Vec<Self::Output>> {
+        storage.words().by_sequence(*inp).map(|i| vec![i])
     }
 
     fn gen_query_vector(
-        index: &vector_space_model::Index<Self::Document, Self::Metadata>,
+        index: &vector_space_model2::Index<Self::Document, Self::Metadata>,
         query: &str,
         _allow_align: bool,
         _language: Option<Language>,
-    ) -> Option<(DocumentVector<Self::GenDoc>, String)> {
-        let query_document = GenDoc::new(vec![query]);
-        let mut doc = DocumentVector::new(index.get_indexer(), query_document)?;
-
-        // TODO: look if this makes the results really better. If not, remove
-        let terms = tinysegmenter::tokenize(query);
+    ) -> Option<(Vector, String)> {
+        let mut terms = vec![(query.to_string(), 1.0)];
 
         let mut indexer = index.get_indexer().clone();
+        for term in tinysegmenter::tokenize(query) {
+            let indexed = indexer.find_term(&term)?;
+            if indexed.doc_frequency() >= 5_000 || terms.iter().any(|i| i.0 == term) {
+                continue;
+            }
 
-        let terms = terms
-            .into_iter()
-            .filter_map(|term| {
-                let indexed = indexer.find_term(&term)?;
-                (indexed.get_frequency() <= 5_000).then(|| term)
-            })
-            .collect::<Vec<_>>();
+            terms.push((term, 0.03));
+        }
 
-        doc.add_terms(index.get_indexer(), &terms, true, Some(0.03));
-
-        Some((doc, query.to_owned()))
+        let vec = index.build_vector_weights(&terms)?;
+        Some((vec, query.to_owned()))
     }
 }

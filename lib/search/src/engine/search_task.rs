@@ -4,13 +4,12 @@ use super::{
     result_item::ResultItem,
     SearchEngine,
 };
-use crate::engine::DocumentGenerateable;
 use error::Error;
 use itertools::Itertools;
-use resources::models::storage::ResourceStorage;
-use std::{collections::BinaryHeap, marker::PhantomData};
+use priority_container::StableUniquePrioContainerMax;
+use std::marker::PhantomData;
 use types::jotoba::languages::Language;
-use vector_space_model::DocumentVector;
+use vector_space_model2::{DocumentVector, Vector};
 
 pub struct SearchTask<'a, T>
 where
@@ -26,10 +25,11 @@ where
     order: Option<Box<dyn Fn(&T::Output, f32, &str, Option<Language>) -> usize>>,
     /// Min relevance returned from vector space algo
     threshold: f32,
-    limit: usize,
     vector_limit: usize,
+    limit: usize,
     offset: usize,
     allow_align: bool,
+    est_limit: usize,
     phantom: PhantomData<T>,
 }
 
@@ -128,85 +128,55 @@ where
         })
     }
 
-    pub fn find_exact(&self) -> Result<Vec<ResultItem<&'static T::Output>>, Error> {
+    pub fn find_exact(&self) -> SearchResult<T::Output> {
         let (query, lang) = self.queries.get(0).unwrap();
         let index = T::get_index(*lang).expect("Lang not loaded");
 
-        let extact_query = T::GenDoc::new(vec![query]);
-        let document =
-            DocumentVector::new(index.get_indexer(), extact_query).ok_or(Error::Unexpected)?;
+        let query_vec = match index.build_vector(&[query], None) {
+            Some(qv) => qv,
+            None => return SearchResult::default(),
+        };
 
-        let res = self.find_by_vec(document, query, *lang)?;
+        let mut out = StableUniquePrioContainerMax::new(self.offset + self.limit);
+        self.find_by_vec(query_vec, query, *lang, &mut out);
 
-        Ok(res)
+        let total_count = out.total_pushed();
+        let res = self.take_page(out);
+
+        SearchResult::new(res, total_count)
     }
 
-    /// Estimates the amount of results efficiently. This 'guess' is defined as follows:
-    ///
-    /// Be 'm' the amount of items a full search would return.
-    /// Be 'n' the guess returned by this function.
-    ///
-    /// - n = 0 => m = 0
-    /// - n <= m
-    pub fn estimate_result_count(&self) -> Result<Guess, Error> {
-        // TODO: maybe we want to have some API input for this value?
-        let est_limit = 100;
-
-        let estimated = self
-            .get_queries()
-            .map(|(_, vec, lang)| {
-                // TODO: maybe remove stopwords from vec to make it faster
-                self.estimate_by_vec(vec, lang, est_limit)
-            })
-            .collect::<Result<Vec<_>, Error>>()?
-            .into_iter()
-            .max()
-            .unwrap_or(0);
-
-        let mut guess_type = GuessType::Undefined;
-
-        if (self.queries.len() == 1 && estimated <= est_limit) || estimated == 0 {
-            // All filtering operations are applied in estimation algorithm as well.
-            // Since we use the max value of query
-            // result, we can only assure it being accurate if there was only one query and no
-            // Limit was reached. From the 1st condition follows that estimated == 0 implies
-            // an accurate results
-            guess_type = GuessType::Accurate;
-        } else if estimated > est_limit {
-            // Were counting 1 more than `est_limit`. Thus `estimated` being bigger than limit
-            // means there are more elements than the given limit. However since were returning a
-            // number <= est_limit, relatively to the estimation the guess type is `Opentop`
-            guess_type = GuessType::OpenTop;
+    /// Runs the search task and writes all items into the priority queue
+    pub fn find_to(&self, out: &mut StableUniquePrioContainerMax<ResultItem<T::Output>>) {
+        for (q_str, vec, lang) in self.get_queries() {
+            self.find_by_vec(vec, &q_str, lang, out);
         }
-
-        let estimated = (estimated).min(est_limit) as u32;
-
-        Ok(Guess::new(estimated, guess_type))
     }
 
     /// Runs the search task and returns the result.
-    pub fn find(&self) -> Result<SearchResult<&'static T::Output>, Error> {
-        let items = self
-            .get_queries()
-            .map(|(q_str, vec, lang)| self.find_by_vec(vec, &q_str, lang))
-            .collect::<Result<Vec<_>, Error>>()?
-            .into_iter()
-            .flatten()
-            .unique_by(|a| a.item)
-            .take(self.vector_limit)
-            .collect::<Vec<_>>();
+    pub fn find(&self) -> Result<SearchResult<T::Output>, Error> {
+        let cap = self.limit + self.offset;
+        let mut pqueue = StableUniquePrioContainerMax::new_allocated(cap, cap);
 
-        Ok(SearchResult::from_binary_heap(
-            BinaryHeap::from(items),
-            self.offset,
-            self.limit,
-        ))
+        for (q_str, vec, lang) in self.get_queries() {
+            self.find_by_vec(vec, &q_str, lang, &mut pqueue);
+        }
+
+        let total_count = pqueue.total_pushed();
+
+        let p_items = self.take_page(pqueue);
+
+        Ok(SearchResult::new(p_items, total_count))
+    }
+
+    /// Takes the correct page from a UniquePrioContainerMax based on the given offset and limit
+    #[inline]
+    fn take_page<U: Ord>(&self, pqueue: StableUniquePrioContainerMax<U>) -> Vec<U> {
+        super::utils::page_from_pqueue(self.limit, self.offset, pqueue)
     }
 
     /// Returns an iterator over all queries in form of document vectors and its assigned language
-    fn get_queries<'b>(
-        &'b self,
-    ) -> impl Iterator<Item = (String, DocumentVector<T::GenDoc>, Option<Language>)> + 'b {
+    fn get_queries<'b>(&'b self) -> impl Iterator<Item = (String, Vector, Option<Language>)> + 'b {
         self.queries.iter().filter_map(move |(q_str, lang)| {
             let index = T::get_index(*lang).expect("Lang not loaded");
             let allow_align = self.allow_align && !self.has_term();
@@ -217,36 +187,39 @@ where
 
     fn find_by_vec(
         &self,
-        q_vec: DocumentVector<T::GenDoc>,
+        q_vec: Vector,
         q_str: &str,
         language: Option<Language>,
-    ) -> Result<Vec<ResultItem<&'static T::Output>>, Error> {
-        let index = T::get_index(language);
-        if index.is_none() {
-            log::error!("Failed to retrieve {:?} index with language", language);
-            return Err(Error::Unexpected);
-        }
-        let index = index.unwrap();
+        out: &mut StableUniquePrioContainerMax<ResultItem<T::Output>>,
+    ) {
+        let index = match T::get_index(language) {
+            Some(index) => index,
+            None => {
+                log::error!("Index {language:?} not loaded");
+                return;
+            }
+        };
 
         let mut vec_store = index.get_vector_store().clone();
-        let query_dimensions: Vec<_> = q_vec.vector().vec_indices().collect();
+        let query_dimensions: Vec<_> = q_vec.vec_indices().collect();
 
         // Retrieve all document vectors that share at least one dimension with the query vector
         let document_vectors = vec_store
             .get_all_iter(&query_dimensions)
             .take(self.vector_limit);
 
-        self.result_from_doc_vectors(document_vectors, &q_vec, q_str, language)
+        self.result_from_doc_vectors(document_vectors, &q_vec, q_str, language, out);
     }
 
     fn result_from_doc_vectors(
         &self,
         document_vectors: impl Iterator<Item = DocumentVector<T::Document>>,
-        q_vec: &DocumentVector<T::GenDoc>,
+        q_vec: &Vector,
         q_str: &str,
         language: Option<Language>,
-    ) -> Result<Vec<ResultItem<&'static T::Output>>, Error> {
-        let storage: &'static ResourceStorage = resources::get();
+        out: &mut StableUniquePrioContainerMax<ResultItem<T::Output>>,
+    ) {
+        let storage = resources::get();
 
         let res = document_vectors
             .filter_map(|i| {
@@ -254,7 +227,8 @@ where
                     return None;
                 }
 
-                let similarity = i.similarity(&q_vec);
+                //let similarity = i.vector().similarity(&q_vec);
+                let similarity = T::similarity(i.vector(), &q_vec);
                 if similarity <= self.threshold {
                     return None;
                 }
@@ -269,19 +243,55 @@ where
             .flatten()
             .filter(|i| self.filter_result(&i.1))
             .map(|(rel, item)| {
-                let relevance = self.calculate_score(item, rel, q_str, language);
+                let relevance = self.calculate_score(&item, rel, q_str, language);
+                ResultItem::new_raw(item, relevance, language)
+            });
 
-                language
-                    .map(|i| ResultItem::with_language(item, relevance, i))
-                    .unwrap_or(ResultItem::new(item, relevance))
+        out.extend(res);
+    }
+
+    /// Estimates the amount of results efficiently. This 'guess' is defined as follows:
+    ///
+    /// Be 'm' the amount of items a full search would return.
+    /// Be 'n' the guess returned by this function.
+    ///
+    /// - n = 0 => m = 0
+    /// - n <= m
+    pub fn estimate_result_count(&self) -> Result<Guess, Error> {
+        let estimated = self
+            .get_queries()
+            .map(|(_, vec, lang)| {
+                // TODO: maybe remove stopwords from vec to make it faster
+                self.estimate_by_vec(vec, lang, self.est_limit)
             })
-            .collect::<Vec<_>>();
-        Ok(res)
+            .collect::<Result<Vec<_>, Error>>()?
+            .into_iter()
+            .max()
+            .unwrap_or(0);
+
+        let mut guess_type = GuessType::Undefined;
+
+        if (self.queries.len() == 1 && estimated <= self.est_limit) || estimated == 0 {
+            // All filtering operations are applied in estimation algorithm as well.
+            // Since we use the max value of query
+            // result, we can only assure it being accurate if there was only one query and no
+            // Limit was reached. From the 1st condition follows that estimated == 0 implies
+            // an accurate results
+            guess_type = GuessType::Accurate;
+        } else if estimated > self.est_limit {
+            // Were counting 1 more than `est_limit`. Thus `estimated` being bigger than limit
+            // means there are more elements than the given limit. However since were returning a
+            // number <= est_limit, relatively to the estimation the guess type is `Opentop`
+            guess_type = GuessType::OpenTop;
+        }
+
+        let est_result = (estimated).min(self.est_limit) as u32;
+        Ok(Guess::new(est_result, guess_type))
     }
 
     fn estimate_by_vec(
         &self,
-        q_vec: DocumentVector<T::GenDoc>,
+        q_vec: Vector,
         language: Option<Language>,
         est_limit: usize,
     ) -> Result<usize, Error> {
@@ -293,7 +303,7 @@ where
         let index = index.unwrap();
 
         let mut vec_store = index.get_vector_store().clone();
-        let query_dimensions: Vec<_> = q_vec.vector().vec_indices().collect();
+        let query_dimensions: Vec<_> = q_vec.vec_indices().collect();
 
         // Retrieve all document vectors that share at least one dimension with the query vector
         let document_vectors = vec_store
@@ -308,7 +318,7 @@ where
                     return None;
                 }
 
-                let similarity = i.similarity(&q_vec);
+                let similarity = T::similarity(i.vector(), &q_vec);
                 if similarity <= self.threshold {
                     return None;
                 }
@@ -324,7 +334,7 @@ where
             .filter(|i| self.filter_result(&i.1))
             .map(|(_, item)| item)
             .unique()
-            // `+1` to know if there are more items
+            // `+1` to find out if there are more items
             .take(est_limit + 1)
             .count();
 
@@ -340,6 +350,7 @@ where
         query: &str,
         language: Option<Language>,
     ) -> usize {
+        // TODO use a struct to store this information instead of using lots of arguments
         self.order
             .as_ref()
             .map(|i| i(item, rel, query, language))
@@ -361,16 +372,17 @@ impl<'a, T: SearchEngine> Default for SearchTask<'a, T> {
     #[inline]
     fn default() -> Self {
         Self {
-            queries: Vec::with_capacity(1),
+            queries: vec![],
             vec_filter: None,
             res_filter: None,
             order: None,
             threshold: 0.2,
             limit: 1000,
+            est_limit: 100,
             vector_limit: 100_000,
             offset: 0,
             allow_align: true,
-            phantom: PhantomData::default(),
+            phantom: PhantomData,
         }
     }
 }

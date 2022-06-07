@@ -3,7 +3,7 @@ use super::part_of_speech::{self, IrregularVerb, PartOfSpeech};
 use super::Word;
 
 use jp_inflections::{Verb, VerbType, WordForm};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// A single Inflection
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
@@ -71,6 +71,7 @@ impl localization::traits::Translatable for Inflection {
 }
 
 /// A set of different inflections which will be displayed for vebs
+#[derive(Serialize, Deserialize)]
 pub struct Inflections {
     pub present: InflectionPair,
     pub present_polite: InflectionPair,
@@ -88,8 +89,11 @@ pub struct Inflections {
     pub imperative: InflectionPair,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct InflectionPair {
+    #[serde(rename = "p")]
     pub positive: String,
+    #[serde(rename = "n")]
     pub negative: String,
 }
 

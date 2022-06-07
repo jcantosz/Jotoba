@@ -2,14 +2,14 @@ use std::{convert::TryFrom, io::Read};
 
 use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt};
 use types::jotoba::languages::Language;
-use vector_space_model::{
+use vector_space_model2::{
     metadata::IndexVersion,
     traits::{Decodable, Encodable},
     Error,
 };
 
 /// Various metadata for the given Index
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Metadata {
     pub version: IndexVersion,
     pub document_count: usize,
@@ -28,7 +28,7 @@ impl Metadata {
     }
 }
 
-impl vector_space_model::metadata::Metadata for Metadata {
+impl vector_space_model2::metadata::Metadata for Metadata {
     #[inline]
     fn get_version(&self) -> IndexVersion {
         self.version
@@ -37,6 +37,10 @@ impl vector_space_model::metadata::Metadata for Metadata {
     #[inline]
     fn get_document_count(&self) -> usize {
         self.document_count
+    }
+
+    fn set_document_count(&mut self, count: usize) {
+        self.document_count = count;
     }
 }
 

@@ -7,7 +7,7 @@ pub mod about;
 pub mod direct;
 pub mod help_page;
 pub mod index;
-pub mod news;
+pub mod news_ep;
 pub mod og_tags;
 pub mod search_ep;
 pub mod search_help;
@@ -26,8 +26,8 @@ use localization::{
     traits::{Translatable, TranslatablePlural},
     TranslationDict,
 };
+use news::NewsEntry;
 use og_tags::TagKeyName;
-use resources::news::NewsEntry;
 use search::{query::Query, sentence::result::SentenceResult};
 
 use search::{kanji::result::Item as KanjiItem, query::UserSettings, word::result::WordResult};
@@ -188,7 +188,6 @@ impl<'a> BaseData<'a> {
             _ => None,
         }
         .unwrap_or_default();
-        println!("query_str: {}", query);
         query
     }
 
