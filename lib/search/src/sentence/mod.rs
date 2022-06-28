@@ -2,41 +2,31 @@ pub mod kanji;
 pub mod result;
 mod tag_only;
 
-use std::time::Instant;
-
-use self::result::{Item, SentenceResult};
-
 use super::query::Query;
 use crate::{
-    engine::{guess::Guess, sentences::foreign, sentences::native, SearchEngine, SearchTask},
-    query::{Form, QueryLang, Tag},
+    engine::{sentences::foreign, sentences::native, SearchEngine, SearchTask},
+    query::{tags::Tag, Form, QueryLang},
 };
 use error::Error;
-use types::jotoba::{languages::Language, sentences::Sentence};
+use result::{Item, SentenceResult};
+use types::jotoba::{languages::Language, search::guess::Guess, sentences::Sentence};
 
 /// Searches for sentences
 pub fn search(query: &Query) -> Result<SentenceResult, Error> {
-    let start = Instant::now();
-
     let res = match query.form {
         Form::TagOnly => tag_only::search(query)?,
-        _ => normal_search(query)?,
+        _ => normal_search(query),
     };
-
-    println!("Sentence search took: {:?}", start.elapsed());
-
     Ok(res)
 }
 
-fn normal_search(query: &Query) -> Result<SentenceResult, Error> {
-    let res = if query.language == QueryLang::Japanese {
+fn normal_search(query: &Query) -> SentenceResult {
+    if query.language == QueryLang::Japanese {
         let query_str = jp_reading(query);
         get_result(jp_search(query, &query_str), query)
     } else {
         get_result(foreign_search(query), query)
-    }?;
-
-    Ok(res)
+    }
 }
 
 fn foreign_search(query: &Query) -> SearchTask<foreign::Engine> {
@@ -59,12 +49,10 @@ fn foreign_search(query: &Query) -> SearchTask<foreign::Engine> {
 }
 
 fn jp_search<'a>(query: &Query, query_str: &'a str) -> SearchTask<'a, native::Engine> {
-    println!("query: {}", query_str);
-
     let mut search_task = SearchTask::<native::Engine>::new(&query_str)
         .limit(query.settings.page_size as usize)
         .offset(query.page_offset)
-        .threshold(0.10);
+        .threshold(0.2);
 
     lang_filter(query, &mut search_task);
     sort_fn(query, query_str.to_string(), &mut search_task, true);
@@ -78,10 +66,11 @@ fn sort_fn<T: SearchEngine<Output = &'static Sentence> + Send>(
     search_task: &mut SearchTask<T>,
     japanese: bool,
 ) {
-    println!("{:#?}", query_str);
     let query = query.clone();
-    search_task.set_order_fn(move |sentence, relevance, _, _| {
-        let mut rel = (relevance * 1000f32) as usize;
+    search_task.with_custom_order(move |item| {
+        let mut rel = (item.vec_simiarity() * 100000f32) as usize;
+
+        let sentence = item.item();
 
         if sentence.has_translation(query.settings.user_lang) {
             rel += 550;
@@ -92,7 +81,7 @@ fn sort_fn<T: SearchEngine<Output = &'static Sentence> + Send>(
         }
 
         rel
-    });
+    })
 }
 
 /// Sets a SearchTasks language filter
@@ -128,22 +117,26 @@ fn lang_filter<T: SearchEngine<Output = &'static Sentence> + Send>(
 fn get_result<T: SearchEngine<Output = &'static Sentence> + Send>(
     search: SearchTask<T>,
     query: &Query,
-) -> Result<SentenceResult, Error> {
+) -> SentenceResult {
     let lang = query.settings.user_lang;
-    let found = search.find()?;
+    let found = search.find();
     let len = found.len();
+    let show_english = query.settings.show_english();
+
     let items = found
         .into_iter()
-        .filter_map(|i| map_sentence_to_item(i, lang, query))
+        .filter_map(|i| map_sentence_to_item(i, lang, show_english))
         .collect::<Vec<_>>();
-
     let hidden = query.has_tag(Tag::Hidden);
-    Ok(SentenceResult { len, items, hidden })
+    SentenceResult { len, items, hidden }
 }
 
-fn map_sentence_to_item(sentence: &Sentence, lang: Language, query: &Query) -> Option<Item> {
-    let sentence =
-        result::Sentence::from_m_sentence(sentence.clone(), lang, query.settings.show_english)?;
+pub fn map_sentence_to_item(
+    sentence: &Sentence,
+    lang: Language,
+    show_english: bool,
+) -> Option<Item> {
+    let sentence = result::Sentence::from_m_sentence(sentence.clone(), lang, show_english)?;
     Some(result::Item { sentence })
 }
 

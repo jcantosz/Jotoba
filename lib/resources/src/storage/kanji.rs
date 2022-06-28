@@ -1,3 +1,4 @@
+use ids_parser::IDS;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use types::jotoba::kanji::{radical::DetailedRadical, Kanji};
@@ -8,7 +9,7 @@ use super::feature::Feature;
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct KanjiStorage {
     /// Index mapping kanji literals to `Kanji` data
-    pub literal_index: HashMap<char, Kanji>,
+    pub literal_index: intmap::IntMap<Kanji>,
 
     /// Mapping from a radical to a list of kanji using this radical
     pub radical_map: HashMap<char, Vec<char>>,
@@ -21,6 +22,9 @@ pub struct KanjiStorage {
 
     // Search tags
     pub genki_levels: HashMap<u8, Vec<char>>,
+
+    /// IDS index for kanji decomposition graph
+    pub ids_index: HashMap<char, IDS>,
 
     has_similar_kanji: bool,
 }
@@ -43,7 +47,7 @@ impl KanjiStorage {
             if !self.has_similar_kanji && !kanji.similar_kanji.is_empty() {
                 self.has_similar_kanji = true;
             }
-            self.literal_index.insert(kanji.literal, kanji);
+            self.literal_index.insert(kanji.literal as u32, kanji);
         }
     }
 
@@ -76,6 +80,10 @@ impl KanjiStorage {
 
         if self.has_similar_kanji {
             out.push(Feature::SimilarKanji);
+        }
+
+        if !self.ids_index.is_empty() {
+            out.push(Feature::KanjiDecompositions);
         }
 
         out

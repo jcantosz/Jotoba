@@ -1,4 +1,4 @@
-use crate::engine::{self, words::foreign::output::WordOutput};
+use crate::engine::{search_task::sort_item::SortItem, words::foreign::output::WordOutput};
 use indexes::relevance::RelevanceIndex;
 use spin::Mutex;
 use std::collections::HashMap;
@@ -27,8 +27,8 @@ impl ForeignOrder {
         if let Some(vec) = self.vec_cached(query, language) {
             return vec;
         }
-        let index = engine::words::foreign::index::get(language)?;
-        let indexer = index.get_indexer().clone();
+        let index = indexes::get().word().foreign(language)?;
+        let indexer = index.get_indexer();
         let vec = make_search_vec(&indexer, query);
         let mut lock = self.query_vecs.lock();
         lock.insert((query.to_string(), language), vec.clone());
@@ -43,24 +43,18 @@ impl ForeignOrder {
         sense: &Sense,
         sg_id: u16,
     ) -> Option<usize> {
-        let rel_index = engine::words::foreign::index::RELEVANCE_INDEXES
-            .get()?
-            .get(&sense.language)?;
+        let rel_index = indexes::get().word().relevance(sense.language)?;
         let rel_vec = rel_index.get(seq_id, sg_id)?;
         let query_vec = self.new_vec_cached(query_str, sense.language)?;
         let res = vec_similarity(rel_vec, &query_vec, &rel_index) * 1000.0;
         Some(res as usize)
     }
 
-    pub fn score(
-        &self,
-        word_output: &WordOutput,
-        relevance: f32,
-        query_str: &str,
-        query_lang: Language,
-        user_lang: Language,
-    ) -> usize {
-        let query_str = query_str.trim().to_lowercase();
+    pub fn score(&self, item: SortItem<WordOutput>, user_lang: Language) -> usize {
+        let relevance = item.vec_simiarity();
+        let word_output = item.item();
+        let query_lang = item.language().unwrap();
+        let query_str = item.query().trim().to_lowercase();
 
         let text_score = (relevance as f64 * 10.0) as usize;
         let word = word_output.word;
@@ -116,7 +110,7 @@ fn make_search_vec(indexer: &TermIndexer, query: &str) -> Option<Vector> {
 #[inline]
 fn vec_similarity(src_vec: &Vector, query: &Vector, r_index: &RelevanceIndex) -> f32 {
     let mut sum = 0.0;
-    let mut overlapping_count = 0;
+    let mut overlapping_count: usize = 0;
 
     for i in src_vec.overlapping(query) {
         sum += i.1;
@@ -127,7 +121,7 @@ fn vec_similarity(src_vec: &Vector, query: &Vector, r_index: &RelevanceIndex) ->
     let src_imp = important_count(&src_vec, r_index);
 
     let diff = (query_imp.abs_diff(src_imp) + 1) as f32;
-    let important_mult = 1.0 / diff;
+    let important_mult = (1.0 / diff) + 1.0;
 
     let src_len = src_vec.sparse_vec().len();
     let query_len = query.sparse_vec().len();
@@ -136,7 +130,9 @@ fn vec_similarity(src_vec: &Vector, query: &Vector, r_index: &RelevanceIndex) ->
         vec_len_mult = src_len as f32 / query_len as f32;
     }
 
-    (overlapping_count as f32 * important_mult * vec_len_mult * 500.0) + sum * vec_len_mult * 40.0
+    //let v = query.sparse_vec().len() as f32 / overlapping_count as f32;
+
+    (overlapping_count as f32 * important_mult * vec_len_mult * 100.0) + sum * vec_len_mult * 100.0
 }
 
 #[inline]

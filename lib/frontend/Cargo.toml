@@ -16,16 +16,19 @@ utils = { path = "../utils" }
 config = { path = "../config" }
 localization = { path = "../localization" }
 resources = { path = "../resources"}
-actix-web = "4.0.1"
+actix-web = "4.1.0"
 serde = "1.0.137"
-sentry = { version = "0.26.0", optional = true }
+sentry = { version = "0.27.0", optional = true }
 log = "0.4.17"
 percent-encoding = "2.1.0"
 types = { path = "../types" , features = ["jotoba_intern"]}
 itertools = "0.10.3"
 
+[dev-dependencies]
+ructe = "0.14.0"
+
 [build-dependencies]
-ructe = "0.13.4"
+ructe = "0.14.0"
 
 [features]
 sentry_error = ["sentry"]

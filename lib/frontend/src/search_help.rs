@@ -1,5 +1,7 @@
-use search::engine::guess::Guess;
-use types::jotoba::{languages::Language as ResLanguage, search::QueryType};
+use types::jotoba::{
+    languages::Language as ResLanguage,
+    search::{guess::Guess, QueryType},
+};
 
 /// Structure containing information for better search help in case no item was
 /// found in a search

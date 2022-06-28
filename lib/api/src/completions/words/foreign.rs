@@ -1,6 +1,6 @@
 use autocompletion::suggest::{
     extension::{
-        kanji_align::KanjiAlignExtension, longest_prefix::LongestPrefixExtension,
+        kanji_align::KanjiAlignExtension, ngram::NGramExtension,
         similar_terms::SimilarTermsExtension,
     },
     query::SuggestionQuery,
@@ -17,79 +17,84 @@ pub fn suggestions(query: &Query, query_str: &str) -> Option<Vec<WordPair>> {
     let query_lower = autocompletion::index::basic::basic_format(query_str.trim());
     let mut task = SuggestionTask::new(30);
 
-    //println!("raw: {:?}", query_lower.trim());
-
-    // Raw
+    let lang = query.settings.language();
 
     // Default search query
-    task.add_query(new_suggestion_query(
-        &query_lower,
-        query.settings.user_lang,
-    )?);
+    task.add_query(new_suggestion_query(&query_lower, lang)?);
 
     // Add results for english
     if query.settings.show_english() {
         let mut en_sugg_query = new_suggestion_query(&query_lower, Language::English)?;
-        en_sugg_query.weights.total_weight = 0.3;
-        en_sugg_query.weights.freq_weight = 0.2;
+        en_sugg_query.weights.total_weight = 0.75;
+        en_sugg_query.weights.freq_weight = 0.15;
         task.add_query(en_sugg_query);
     }
 
     // Romaji result
-    if let Some(hira_query) = try_romaji(query_str.trim()) {
-        if let Some(jp_engine) = storage::JP_WORD_INDEX.get() {
-            let mut query = SuggestionQuery::new(jp_engine, hira_query);
-            query.weights.total_weight = 0.5;
-            /*
-            query.weights.freq_weight = 0.1;
-            query.weights.str_weight = 1.9;
-            */
+    //if let Some(hira_query) = try_romaji(query_str.trim()) {
+    let hira_query = try_romaji(query_str.trim()).unwrap_or_else(|| query_str.to_hiragana());
+    //let hira_query = query_str.to_hiragana();
+    println!("hira query: {hira_query}");
+    let jp_engine = indexes::get_suggestions().jp_words();
+    let mut rom_query = SuggestionQuery::new(jp_engine, hira_query);
+    rom_query.weights.total_weight = 0.6;
+    /*
+    query.weights.freq_weight = 0.1;
+    query.weights.str_weight = 1.9;
+    */
 
-            let mut k_r_align = KanjiAlignExtension::new(jp_engine);
-            k_r_align.options.weights.freq_weight = 1.0;
-            k_r_align.options.threshold = 5;
-            query.add_extension(k_r_align);
+    let mut k_r_align = KanjiAlignExtension::new(jp_engine);
+    k_r_align.options.weights.freq_weight = 1.0;
+    k_r_align.options.threshold = 5;
+    rom_query.add_extension(k_r_align);
 
-            let mut similar_terms = SimilarTermsExtension::new(jp_engine, 5);
-            similar_terms.options.weights.total_weight = 0.005;
-            similar_terms.options.threshold = 10;
-            query.add_extension(similar_terms);
+    let mut similar_terms = SimilarTermsExtension::new(jp_engine, 14);
+    similar_terms.options.threshold = 10;
+    similar_terms.options.weights.total_weight = 0.75;
+    similar_terms.options.weights.freq_weight = 0.2;
+    similar_terms.options.weights.str_weight = 1.8;
+    similar_terms.options.min_query_len = 4;
+    rom_query.add_extension(similar_terms);
 
-            task.set_rel_mod(|i, rel| {
-                let out = i.to_output();
-                let kana = &out.primary;
-                if japanese::romaji_prefix(query_str.trim(), &kana) {
-                    return rel + 1000;
-                }
-                rel
-            });
+    let mut ng_ext = NGramExtension::with_sim_threshold(jp_engine, 0.35);
+    //ng_ext.options.threshold = 10;
+    ng_ext.options.weights.total_weight = 0.25;
+    ng_ext.options.weights.freq_weight = 0.04;
+    ng_ext.query_weigth = 0.85;
+    ng_ext.term_limit = 10_000;
+    //ng_ext.options.weights.total_weight = 0.1;
+    ng_ext.options.min_query_len = 5;
+    ng_ext.cust_query = Some(query_str);
+    rom_query.add_extension(ng_ext);
 
-            task.add_query(query);
+    task.set_rel_mod(|i, rel| {
+        let out = i.to_output();
+        let kana = &out.primary;
+        if japanese::romaji_prefix(query_str.trim(), &kana) {
+            return rel + 1000;
         }
-    }
+        rel
+    });
+
+    task.add_query(rom_query);
+    //}
 
     Some(convert_results(task.search()))
 }
 
 fn new_suggestion_query(query: &str, lang: Language) -> Option<SuggestionQuery> {
-    let engine = storage::WORD_INDEX.get()?.get(&lang)?;
+    let engine = indexes::get_suggestions().foreign_words(lang)?;
 
     let mut suggestion_query = SuggestionQuery::new(engine, &query);
     suggestion_query.weights.str_weight = 1.5;
     suggestion_query.weights.freq_weight = 0.5;
 
-    let mut ste = SimilarTermsExtension::new(engine, 5);
-    ste.options.threshold = 10;
-    ste.options.weights.freq_weight = 1.0;
-    ste.options.weights.str_weight = 1.0;
-    ste.options.weights.total_weight = 0.05;
-    //suggestion_query.add_extension(ste);
-
-    let mut lpe = LongestPrefixExtension::new(engine, 3, 10);
-    lpe.options.threshold = 10;
-    lpe.options.weights.freq_weight = 1.0;
-    lpe.options.weights.total_weight = 0.3;
-    //suggestion_query.add_extension(lpe);
+    let mut ng_ex = NGramExtension::with_sim_threshold(engine, 0.5);
+    ng_ex.options.weights.total_weight = 0.7;
+    ng_ex.options.weights.freq_weight = 0.05;
+    ng_ex.query_weigth = 0.7;
+    ng_ex.options.min_query_len = 4;
+    suggestion_query.add_extension(ng_ex);
 
     Some(suggestion_query)
 }

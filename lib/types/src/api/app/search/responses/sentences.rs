@@ -1,7 +1,7 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Names API response. Contains all Names
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Response {
     sentences: Vec<Sentence>,
 }
@@ -13,8 +13,9 @@ impl Response {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Sentence {
+    sequence: u32,
     content: String,
     translation: String,
 }
@@ -22,8 +23,9 @@ pub struct Sentence {
 impl Sentence {
     /// Create a new sentence
     #[inline]
-    pub fn new(content: String, translation: String) -> Self {
+    pub fn new(sequence: u32, content: String, translation: String) -> Self {
         Self {
+            sequence,
             content,
             translation,
         }

@@ -5,7 +5,6 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-
 use std::{
     fs::{self, File},
     path::{Path, PathBuf},
@@ -30,6 +29,7 @@ pub struct ServerConfig {
     pub img_upload_dir: Option<String>,
     pub tess_data: Option<String>,
     pub news_folder: Option<String>,
+    pub unidic_dict: Option<String>,
     pub debug_mode: Option<bool>,
 }
 
@@ -40,41 +40,18 @@ pub struct SentryConfig {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct SearchConfig {
-    pub suggestion_timeout: Option<u64>,
     pub suggestion_sources: Option<String>,
     pub indexes_source: Option<String>,
     pub report_queries_after: Option<u64>,
-    pub search_timeout: Option<u64>,
 }
 
 impl Config {
-    /// Returns the configured search timeout or the default value `10s`
-    pub fn get_search_timeout(&self) -> Duration {
-        let sec = self
-            .search
-            .as_ref()
-            .and_then(|i| i.search_timeout)
-            .unwrap_or(10);
-        Duration::from_secs(sec)
-    }
-
-    /// Returns the configured suggestion timeout or its default value if not set
-    pub fn get_suggestion_timeout(&self) -> Duration {
-        let amount = self
-            .search
-            .as_ref()
-            .and_then(|i| i.suggestion_timeout)
-            .unwrap_or(100);
-
-        Duration::from_millis(amount)
-    }
-
     /// Returns the configured index source files or its default value if not set
     pub fn get_indexes_source(&self) -> &str {
         self.search
             .as_ref()
             .and_then(|i| i.indexes_source.as_deref())
-            .unwrap_or("./indexes")
+            .unwrap_or("./resources/indexes")
     }
 
     /// Returns the configured suggestion source files or its default value if not set
@@ -82,7 +59,7 @@ impl Config {
         self.search
             .as_ref()
             .and_then(|i| i.suggestion_sources.as_deref())
-            .unwrap_or("./suggestions")
+            .unwrap_or("./resources/suggestions")
     }
 
     /// Returns the configured query report timeout
@@ -114,6 +91,15 @@ impl Config {
     }
 
     /// Returns the configured (or default) path for the radical map
+    pub fn get_unidic_dict(&self) -> String {
+        self.server
+            .unidic_dict
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| ServerConfig::default().unidic_dict.unwrap())
+    }
+
+    /// Returns the configured (or default) path for the radical map
     pub fn get_img_scan_upload_path(&self) -> String {
         self.server
             .img_upload_dir
@@ -137,8 +123,9 @@ impl Default for ServerConfig {
             listen_address: String::from("127.0.0.1:8080"),
             storage_data: Some(String::from("./resources/storage_data")),
             img_upload_dir: Some(String::from("./img_scan_tmp")),
+            unidic_dict: Some(String::from("./resources/unidic-mecab")),
             tess_data: None,
-            news_folder: Some(String::from("./news")),
+            news_folder: Some(String::from("./resources/news")),
             debug_mode: Some(false),
         }
     }
@@ -158,7 +145,7 @@ impl ServerConfig {
     }
 
     pub fn get_news_folder(&self) -> &str {
-        self.news_folder.as_deref().unwrap_or("./news")
+        self.news_folder.as_deref().unwrap_or("./resources/news")
     }
 }
 

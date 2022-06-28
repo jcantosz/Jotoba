@@ -2,9 +2,9 @@ pub mod foreign;
 pub mod kana_end_ext;
 pub mod native;
 
-use std::cmp::Ordering;
+use std::{cmp::Ordering, time::Instant};
 
-use japanese::JapaneseExt;
+use romaji::RomajiExt;
 use search::query::{Query, QueryLang};
 use types::api::completions::{Response, WordPair};
 use utils::bool_ord;
@@ -28,9 +28,13 @@ pub(crate) fn suggestions(query: Query, radicals: &[char]) -> Option<Response> {
 
 /// Returns Ok(suggestions) for the given query ordered and ready to display
 fn try_word_suggestions(query: &Query, radicals: &[char]) -> Option<Vec<WordPair>> {
+    let start = Instant::now();
     // Get sugesstions for matching language
+
+    let romaji_query = RomajiExt::to_romaji(query.query.as_str());
+
     let word_pairs = match query.language {
-        QueryLang::Japanese => native::suggestions(&query, radicals)?,
+        QueryLang::Japanese => native::suggestions(&query, &romaji_query, radicals)?,
         QueryLang::Foreign | QueryLang::Undetected | QueryLang::Korean => {
             let mut res = foreign::suggestions(&query, &query.query).unwrap_or_default();
 
@@ -39,6 +43,7 @@ fn try_word_suggestions(query: &Query, radicals: &[char]) -> Option<Vec<WordPair
             res
         }
     };
+    log::debug!("Suggestions took: {:?}", start.elapsed());
 
     Some(word_pairs)
 }

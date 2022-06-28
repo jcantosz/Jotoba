@@ -9,7 +9,7 @@ use actix_web::{
 };
 use config::Config;
 use log::{debug, warn};
-use std::{path::Path, sync::Arc, time::Instant};
+use std::{path::Path, sync::Arc, thread, time::Instant};
 
 use crate::{check, cli::Options};
 
@@ -44,8 +44,7 @@ pub(super) async fn start(options: Options) -> std::io::Result<()> {
 
     let address = config.server.listen_address.clone();
 
-    if !check::resources() {
-        log::error!("Not all required data found! Exiting");
+    if !check() {
         return Ok(());
     }
 
@@ -139,10 +138,18 @@ pub(super) async fn start(options: Options) -> std::io::Result<()> {
                                 "words",
                                 actixweb::post().to(api::app::search::words::search),
                             )
-                            .service(actixweb::scope("details").route(
-                                "word",
-                                actixweb::post().to(api::app::details::word::details),
-                            )),
+                            .service(
+                                actixweb::scope("details")
+                                    .route(
+                                        "word",
+                                        actixweb::post().to(api::app::details::word::details),
+                                    )
+                                    .route(
+                                        "sentence",
+                                        actixweb::post()
+                                            .to(api::app::details::sentences::details_ep),
+                                    ),
+                            ),
                     )
                     .service(
                         actixweb::scope("search")
@@ -157,9 +164,16 @@ pub(super) async fn start(options: Options) -> std::io::Result<()> {
                                 actixweb::post().to(api::search::sentence::sentence_search),
                             ),
                     )
-                    .route(
-                        "/kanji/by_radical",
-                        actixweb::post().to(api::radical::kanji_by_radicals),
+                    .service(
+                        actixweb::scope("kanji")
+                            .route(
+                                "by_radical",
+                                actixweb::post().to(api::radical::kanji_by_radicals),
+                            )
+                            .route(
+                                "decompgraph",
+                                actixweb::post().to(api::kanji::ids_tree::decomp_graph),
+                            ),
                     )
                     .route(
                         "/radical/search",
@@ -238,6 +252,13 @@ async fn docs(_req: HttpRequest) -> actix_web::Result<NamedFile> {
 }
 
 pub(crate) fn prepare_data(ccf: &Config) {
+    let cf = ccf.clone();
+    thread::spawn(move || {
+        indexes::storage::suggestions::load(cf.get_suggestion_sources())
+            .expect("Failed to load suggestions");
+        log::debug!("Suggestions loaded");
+    });
+
     rayon::scope(move |s| {
         let cf = ccf.clone();
         s.spawn(move |_| {
@@ -247,19 +268,14 @@ pub(crate) fn prepare_data(ccf: &Config) {
 
         let cf = ccf.clone();
         s.spawn(move |_| {
-            log::debug!("Loading Suggestions");
-            load_suggestions(&cf);
-        });
-
-        let cf = ccf.clone();
-        s.spawn(move |_| {
             log::debug!("Loading Indexes");
             load_indexes(&cf);
         });
 
-        s.spawn(|_| {
+        let cf = ccf.clone();
+        s.spawn(move |_| {
             log::debug!("Loading tokenizer");
-            load_tokenizer()
+            load_tokenizer(&cf);
         });
 
         let cf = ccf.clone();
@@ -279,16 +295,8 @@ fn setup_logger() {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
 }
 
-pub fn load_tokenizer() {
-    use sentence_reader::{JA_NL_PARSER, NL_PARSER_PATH};
-
-    if !Path::new(NL_PARSER_PATH).exists() {
-        panic!("No NL dict was found! Place the following folder in he binaries root dir: ./unidic-mecab");
-    }
-
-    // Force parser to parse something to
-    // prevent 1. search after launch taking up several seconds
-    JA_NL_PARSER.parse("");
+pub fn load_tokenizer(config: &Config) {
+    sentence_reader::load_parser(&config.get_unidic_dict());
 }
 
 /// Clears uploaded images which haven't been cleared yet
@@ -308,13 +316,9 @@ fn debug_info() {
 }
 
 pub fn load_resources(src: &str) {
+    let start = Instant::now();
     resources::load(src).expect("Failed to load resource storage");
-}
-
-fn load_suggestions(config: &Config) {
-    if let Err(err) = api::completions::load_suggestions(config) {
-        warn!("Failed to load suggestions: {}", err);
-    }
+    debug!("Resources took: {:?}", start.elapsed());
 }
 
 fn load_translations(config: &Config) -> Arc<TranslationDict> {
@@ -328,7 +332,26 @@ fn load_translations(config: &Config) -> Arc<TranslationDict> {
 }
 
 pub fn load_indexes(config: &Config) {
-    search::engine::load_indexes(config).expect("Failed to load v2 index files");
+    indexes::storage::load(config.get_indexes_source()).expect("Failed to load index files");
+}
+
+fn check() -> bool {
+    if !check::resources() {
+        log::error!("Not all required data found! Exiting");
+        return false;
+    }
+
+    if !indexes::get().check() {
+        log::error!("Not all indexes are available!");
+        return false;
+    }
+
+    if !indexes::get_suggestions().check() {
+        log::error!("Not all suggestion indexes are available!");
+        //return false;
+    }
+
+    true
 }
 
 #[cfg(feature = "sentry_error")]

@@ -1,8 +1,7 @@
 pub mod foreign;
 
-use crate::{query::regex::RegexSQuery, SearchMode};
+use crate::{engine::search_task::sort_item::SortItem, query::regex::RegexSQuery, SearchMode};
 use japanese::JapaneseExt;
-use levenshtein::levenshtein;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use types::jotoba::{
@@ -43,30 +42,28 @@ pub fn regex_order(word: &Word, found_in: &str, _query: &RegexSQuery) -> usize {
 }
 
 /// Search order for words searched by japanese meaning/kanji/reading
-pub fn japanese_search_order(
-    word: &Word,
-    relevance: f32,
-    query_str: &str,
-    original_query: Option<&str>,
-) -> usize {
-    let mut score: usize = (relevance * 10f32) as usize;
+pub fn japanese_search_order(item: SortItem<&'static Word>, original_query: Option<&str>) -> usize {
+    let mut score: usize = (item.vec_simiarity() * 10f32) as usize;
 
-    let reading = word.get_reading();
-    let kana = &word.reading.kana.reading;
+    let word = item.item();
+    let query_str = japanese::to_halfwidth(item.query());
 
-    if reading.reading == *query_str || word.reading.kana.reading == *query_str {
+    let reading = japanese::to_halfwidth(&word.get_reading().reading);
+    let kana = japanese::to_halfwidth(&word.reading.kana.reading);
+
+    if reading == *query_str || kana == *query_str {
         score += 80;
 
         // Show kana only readings on top if they match with query
         if word.reading.kanji.is_none() {
             score += 10;
         }
-    } else if reading.reading.starts_with(query_str) {
+    } else if reading.starts_with(&query_str) {
         score += 4;
     }
 
     if let Some(original_query) = original_query {
-        if original_query == reading.reading || original_query == kana
+        if original_query == reading || original_query == kana
         //&& query_str != reading.reading
         {
             score += 500;
@@ -82,9 +79,7 @@ pub fn japanese_search_order(
         score += 20;
     }
 
-    if word.get_reading().reading.starts_with(query_str)
-        || (query_str.is_kana() && word.reading.kana.reading.starts_with(query_str))
-    {
+    if reading.starts_with(&query_str) || (query_str.is_kana() && reading.starts_with(&query_str)) {
         score += 20;
     }
 
@@ -93,87 +88,14 @@ pub fn japanese_search_order(
         .reading
         .alternative
         .iter()
-        .any(|i| i.reading == *query_str)
+        .map(|i| japanese::to_halfwidth(&i.reading))
+        .any(|i| i == *query_str)
     {
         score += 60;
     }
 
     score
 }
-
-/*
-fn make_search_vec(indexer: &TermIndexer, query: &str) -> Option<Vector> {
-    let terms: Vec<_> = query
-        .split(' ')
-        .filter_map(|s_term| Some((s_term, indexer.get_term(s_term)?)))
-        .map(|(_, dim)| (dim as u32, 1.0))
-        .collect();
-
-    if terms.is_empty() {
-        return None;
-    }
-
-    Some(Vector::create_new_raw(terms))
-}
-
-fn overlapping_vals(src_vec: &Vector, query: &Vector) -> f32 {
-    if !src_vec.could_overlap(query) {
-        return 0.0;
-    }
-
-    let overlapping = src_vec.overlapping(query).map(|i| i.1).collect::<Vec<_>>();
-    let sum: f32 = overlapping.iter().sum();
-    let div = src_vec.sparse_vec().len().max(query.sparse_vec().len());
-    let overlapping_relevance = (overlapping.len() as f32 / div as f32) * 5.0;
-    overlapping_relevance + sum * 2.0
-}
-
-fn gloss_relevance(query_str: &str, seq_id: u32, sense: &Sense, gloss: &Gloss) -> Option<usize> {
-    let index = engine::words::foreign::index::get(sense.language)?;
-    let rel_index = engine::words::foreign::index::RELEVANCE_INDEXES
-        .get()?
-        .get(&sense.language)?;
-
-    let indexer = index.get_indexer().clone();
-    let query_vec = make_search_vec(&indexer, query_str)?;
-
-    let sg_id = to_unique_id(sense.id, gloss.id);
-    let rel_vec = rel_index.get(seq_id, sg_id)?;
-    let val = (overlapping_vals(rel_vec, &query_vec)) as usize;
-    Some(val)
-}
-
-fn foreign_search_order(
-    word_output: &WordOutput,
-    relevance: f32,
-    query_str: &str,
-    query_lang: Language,
-    user_lang: Language,
-) -> usize {
-    let text_score = (relevance as f64 * 10000.0) as usize;
-
-    let word = word_output.word;
-
-    let query_str = query_str.trim().to_lowercase();
-
-    let gloss_relevance = word_output
-        .position_iter()
-        .filter_map(|(s_id, g_id, _)| {
-            let sense = word.sense_by_id(s_id).expect("Failed to get sense");
-            let gloss = sense.gloss_by_id(g_id).expect("Failed to get gloss");
-            Some((sense, gloss))
-        })
-        .filter_map(|(sense, gloss)| gloss_relevance(&query_str, word.sequence, sense, gloss))
-        .map(|i| i + 1000)
-        //   .inspect(|i| println!("{:?}: {}", word.get_reading().reading, i))
-        .max()
-        .unwrap_or_else(|| {
-            foreign_search_fall_back(word, relevance, &query_str, query_lang, user_lang)
-        });
-
-    gloss_relevance + text_score
-}
-*/
 
 pub fn foreign_search_fall_back(
     word: &Word,
@@ -222,48 +144,24 @@ pub fn foreign_search_fall_back(
     score
 }
 
-pub(super) fn kanji_reading_search(
-    word: &Word,
-    kanji_reading: &types::jotoba::kanji::reading::ReadingSearch,
-    relevance: f32,
-) -> usize {
-    let mut score: usize = (relevance * 25f32) as usize;
-
-    // This function should only be called for kanji reading search queries!
-    let formatted_reading = types::jotoba::kanji::format_reading(&kanji_reading.reading);
-    let kana_reading = &word.reading.kana.reading;
-
-    if formatted_reading.is_hiragana() {
-        // Kun reading
-        if *kana_reading == formatted_reading
-            // Don't show direct readings if the kanji reading is a suffix/prefix
-            && !kanji_reading.reading.starts_with('-')
-            && !kanji_reading.reading.ends_with('-')
-        {
-            score += 20;
-        }
-    } else {
-        if kana_reading.to_hiragana() == formatted_reading.to_hiragana() {
-            score += 100;
-        } else if kana_reading
-            .to_hiragana()
-            .contains(&formatted_reading.to_hiragana())
-        {
-            // On reading
-            score +=
-                (20 - levenshtein(
-                    &kana_reading.to_hiragana(),
-                    &formatted_reading.to_hiragana(),
-                )) * 2;
-        }
-    }
+pub(super) fn kanji_reading_search(item: SortItem<&'static Word>) -> usize {
+    let word = item.item();
+    let mut score: usize = 0;
 
     if word.is_common() {
-        score += 8;
+        score += 100;
     }
 
     if let Some(jlpt) = word.jlpt_lvl {
-        score += jlpt as usize;
+        score += jlpt as usize * 10;
+    }
+
+    if score == 0 {
+        // Show shorter words on top if they aren't important
+        let reading_len = word.reading.get_reading().reading.chars().count();
+        score = 100usize.saturating_sub(reading_len * 2);
+    } else {
+        score += 100;
     }
 
     score

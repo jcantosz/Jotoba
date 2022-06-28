@@ -1,6 +1,5 @@
-use serde::{Deserialize, Serialize};
-
 use crate::jotoba::search::QueryType;
+use serde::{Deserialize, Serialize};
 
 /// Request payload structure for suggestion endpoint
 #[derive(Deserialize)]
@@ -25,6 +24,24 @@ pub struct Request {
 pub struct Response {
     pub suggestions: Vec<WordPair>,
     pub suggestion_type: SuggestionType,
+}
+
+impl Response {
+    #[inline]
+    pub fn new(suggestions: Vec<WordPair>) -> Self {
+        Self {
+            suggestions,
+            suggestion_type: SuggestionType::Default,
+        }
+    }
+
+    #[inline]
+    pub fn with_type(suggestions: Vec<WordPair>, suggestion_type: SuggestionType) -> Self {
+        Self {
+            suggestions,
+            suggestion_type,
+        }
+    }
 }
 
 /// The type of suggestion. `Default` in most cases
@@ -54,6 +71,22 @@ pub struct WordPair {
 
 #[cfg(feature = "jotoba_intern")]
 impl WordPair {
+    #[inline]
+    pub fn new(primary: String) -> Self {
+        Self {
+            primary,
+            secondary: None,
+        }
+    }
+
+    #[inline]
+    pub fn with_secondary(primary: String, secondary: String) -> Self {
+        Self {
+            primary,
+            secondary: Some(secondary),
+        }
+    }
+
     /// Returns true if [`self`] contains [`reading`]
     pub fn has_reading(&self, reading: &str) -> bool {
         self.primary == reading

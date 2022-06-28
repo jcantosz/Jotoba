@@ -1,7 +1,8 @@
 #![allow(irrefutable_let_patterns)]
 
-//#[global_allocator]
-//static ALLOC: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
+// Benchmarks say this is up to 50% faster
+#[global_allocator]
+static ALLOC: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
 
 mod check;
 mod cli;
@@ -17,7 +18,7 @@ pub async fn main() {
         return;
     }
 
-    // Start the werbserver on --stat/-s
+    // Start the webserver on --stat/-s
     if options.start {
         webserver::start(options).await.expect("webserver failed");
         return;

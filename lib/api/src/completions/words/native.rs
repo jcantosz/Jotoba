@@ -1,24 +1,28 @@
+use super::{super::*, kana_end_ext::KanaEndExtension};
 use autocompletion::{
     index::{str_item::StringItem, IndexItem},
     suggest::{
-        extension::{kanji_align::KanjiAlignExtension, similar_terms::SimilarTermsExtension},
+        extension::{
+            kanji_align::KanjiAlignExtension, ngram::NGramExtension,
+            similar_terms::SimilarTermsExtension,
+        },
         query::SuggestionQuery,
         task::SuggestionTask,
     },
 };
 use romaji::RomajiExt;
 
-use super::{super::*, kana_end_ext::KanaEndExtension};
-
-const MAX_SENTENCE_LEN: usize = 10;
+const MAX_SENTENCE_LEN: usize = 15;
 
 /// Get suggestions for foreign search input
-pub fn suggestions(query: &Query, radicals: &[char]) -> Option<Vec<WordPair>> {
-    let jp_engine = storage::JP_WORD_INDEX.get()?;
+pub fn suggestions(query: &Query, romaji_query: &str, radicals: &[char]) -> Option<Vec<WordPair>> {
+    let jp_engine = indexes::get_suggestions().jp_words();
     let query_str = query.query.as_str();
 
     let mut suggestion_task = SuggestionTask::new(30);
+
     let mut main_sugg_query = SuggestionQuery::new(jp_engine, query_str);
+    main_sugg_query.weights.str_weight = 1.2;
 
     // Kanji reading align (くにうた ー＞ 国歌)
     let mut k_r_align = KanjiAlignExtension::new(jp_engine);
@@ -28,15 +32,25 @@ pub fn suggestions(query: &Query, radicals: &[char]) -> Option<Vec<WordPair>> {
 
     // Find 天気予報 even if 天気よほう was written
     let mut kana_end_ext = KanaEndExtension::new(jp_engine, 10);
-    kana_end_ext.options.weights.freq_weight = 0.3;
-    kana_end_ext.options.weights.total_weight = 0.1;
+    kana_end_ext.options.weights.total_weight = 0.45;
+    kana_end_ext.options.weights.freq_weight = 0.4;
     main_sugg_query.add_extension(kana_end_ext);
 
-    // Similar terms
-    let mut ste = SimilarTermsExtension::new(jp_engine, 7);
+    // Similar terms based on pronounciation
+    let mut ste = SimilarTermsExtension::new(jp_engine, 16);
     ste.options.threshold = 10;
-    ste.options.weights.total_weight = 0.01;
+    ste.options.weights.total_weight = 0.6;
+    ste.options.weights.freq_weight = 0.5;
+    //ste.options.weights.str_weight = 1.4;
     main_sugg_query.add_extension(ste);
+
+    // Fix typos
+    let mut ng_ex = NGramExtension::with_sim_threshold(jp_engine, 0.5);
+    ng_ex.options.weights.freq_weight = 0.05;
+    ng_ex.query_weigth = 0.7;
+    ng_ex.cust_query = Some(&romaji_query);
+
+    main_sugg_query.add_extension(ng_ex);
 
     suggestion_task.add_query(main_sugg_query);
 
@@ -135,21 +149,8 @@ fn word_rad_filter(query: &str, word: &types::jotoba::words::Word, radicals: &[c
         .filter_map(|k| k.is_kanji().then(|| retrieve.by_literal(k)).flatten())
         .any(|k| {
             if !k.parts.is_empty() {
-                return is_subset(radicals, &k.parts);
+                return utils::part_of(radicals, &k.parts);
             }
             false
         })
-}
-
-/// Returns `true` if `subs` is a subset of `full`
-pub fn is_subset<T: PartialEq>(subs: &[T], full: &[T]) -> bool {
-    if subs.is_empty() || full.is_empty() || subs.len() > full.len() {
-        return false;
-    }
-    for i in subs {
-        if !full.contains(i) {
-            return false;
-        }
-    }
-    true
 }

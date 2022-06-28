@@ -1,3 +1,4 @@
+use ids_parser::IDS;
 use sorted_intersection::SortedIntersection;
 use types::jotoba::kanji::{radical::DetailedRadical, Kanji};
 
@@ -17,8 +18,13 @@ impl<'a> KanjiRetrieve<'a> {
     /// Get a kanji by its sequence id
     #[inline]
     pub fn by_literal(&self, literal: char) -> Option<&Kanji> {
-        //self.storage.dict_data.kanji.kanji.get(&literal)
-        self.storage.literal_index.get(&literal)
+        self.storage.literal_index.get(literal as u32)
+    }
+
+    /// Returns `true` if the index has the literal
+    #[inline]
+    pub fn has_literal(&self, literal: char) -> bool {
+        self.storage.literal_index.contains_key(literal as u32)
     }
 
     /// Returns all kanji with the given radicals
@@ -68,9 +74,30 @@ impl<'a> KanjiRetrieve<'a> {
         self.iter().cloned().collect()
     }
 
+    #[inline]
+    pub fn ids(&self, kanji_lit: char) -> Option<&IDS> {
+        self.storage.ids_index.get(&kanji_lit)
+    }
+
     /// Returns the count of kanji
     #[inline]
     pub fn count(&self) -> usize {
         self.storage.literal_index.len()
+    }
+}
+
+impl japanese::furigana::generate::ReadingRetrieve for KanjiRetrieve<'_> {
+    #[inline]
+    fn onyomi(&self, lit: char) -> Vec<String> {
+        self.by_literal(lit)
+            .map(|i| i.onyomi.clone())
+            .unwrap_or_default()
+    }
+
+    #[inline]
+    fn kunyomi(&self, lit: char) -> Vec<String> {
+        self.by_literal(lit)
+            .map(|i| i.kunyomi.clone())
+            .unwrap_or_default()
     }
 }

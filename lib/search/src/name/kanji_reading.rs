@@ -1,14 +1,12 @@
-use error::Error;
-use japanese::furigana::generate::retrieve_readings;
-use types::jotoba::names::Name;
-use utils::to_option;
-
+use super::result::NameResult;
 use crate::{
     engine::{names::native, SearchTask},
     query::Query,
 };
-
-use super::result::NameResult;
+use error::Error;
+use japanese::furigana::generate::{assign_readings, ReadingRetrieve};
+use resources::retrieve::kanji::KanjiRetrieve;
+use types::jotoba::names::Name;
 
 /// Search by kanji reading
 pub fn search(query: &Query) -> Result<NameResult, Error> {
@@ -23,44 +21,60 @@ pub fn search(query: &Query) -> Result<NameResult, Error> {
     let literal = kanji_reading.literal;
     let reading = kanji_reading.reading.clone();
 
-    task.set_result_filter(move |name| filter(name, &reading, literal));
+    task.set_result_filter(move |name| filter(name, &reading, literal).unwrap_or(false));
 
-    Ok(NameResult::from(task.find()?))
+    Ok(NameResult::from(task.find()))
 }
 
-fn filter(name: &Name, reading: &str, literal: char) -> bool {
-    if name.kanji.is_none() {
-        return false;
-    }
+/// Search result filter function
+fn filter(name: &Name, reading: &str, literal: char) -> Option<bool> {
+    let kanji = name.kanji.as_ref()?;
 
-    let kanji = name.kanji.as_ref().unwrap();
-    let readings = match retrieve_readings(get_kanji_readings, kanji, &name.kana) {
-        Some(r) => r,
-        None => return false,
-    };
+    let retrieve = NanoriRetrieve::new(resources::get().kanji());
+    let readings = assign_readings(retrieve, kanji, &name.kana)?;
 
-    readings
-        .iter()
-        .any(|i| i.0.contains(&literal.to_string()) && i.1.contains(&reading))
+    Some(
+        readings
+            .iter()
+            .any(|i| i.0.contains(&literal.to_string()) && i.1.contains(&reading)),
+    )
 }
 
-fn get_kanji_readings(i: String) -> Option<(Option<Vec<String>>, Option<Vec<String>>)> {
-    let retrieve = resources::get().kanji();
-    let kanji = retrieve.by_literal(i.chars().next()?)?;
+/// Custom `ReadingRetrieve` implementing struct to include
+// nanori readings in reading retrieve function
+struct NanoriRetrieve<'a> {
+    kanji_retrieve: KanjiRetrieve<'a>,
+}
 
-    if kanji.onyomi.is_empty() && kanji.kunyomi.is_empty() {
-        return None;
+impl<'a> NanoriRetrieve<'a> {
+    fn new(kanji_retrieve: KanjiRetrieve<'a>) -> Self {
+        Self { kanji_retrieve }
+    }
+}
+
+impl<'a> ReadingRetrieve for NanoriRetrieve<'a> {
+    #[inline]
+    fn onyomi(&self, lit: char) -> Vec<String> {
+        self.kanji_retrieve.onyomi(lit)
     }
 
-    let kun = kanji
-        .clone()
-        .kunyomi
-        .into_iter()
-        .chain(kanji.natori.clone().into_iter())
-        .collect::<Vec<_>>();
+    #[inline]
+    fn kunyomi(&self, lit: char) -> Vec<String> {
+        self.kanji_retrieve.kunyomi(lit)
+    }
 
-    let kun = to_option(kun);
-    let on = to_option(kanji.onyomi.clone());
+    fn all(&self, lit: char) -> Vec<String> {
+        let res = resources::get().kanji();
+        let k = match res.by_literal(lit) {
+            Some(k) => k,
+            None => return vec![],
+        };
 
-    Some((kun, on))
+        k.kunyomi
+            .clone()
+            .into_iter()
+            .chain(k.onyomi.clone())
+            .chain(k.nanori.clone())
+            .collect()
+    }
 }

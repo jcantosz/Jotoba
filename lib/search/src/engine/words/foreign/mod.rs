@@ -1,14 +1,13 @@
-pub mod doc;
-pub mod index;
 pub mod output;
 
-use crate::engine::{metadata::Metadata, Indexable, SearchEngine, SearchTask};
+use crate::engine::{Indexable, SearchEngine, SearchTask};
+use indexes::{metadata::Metadata, words::document::FWordDoc};
 use resources::storage::ResourceStorage;
 use types::jotoba::languages::Language;
 use utils::to_option;
 use vector_space_model2::{build::weights::TFIDF, Vector};
 
-use self::{doc::FWordDoc, output::WordOutput};
+use self::output::WordOutput;
 
 pub struct Engine {}
 
@@ -20,7 +19,8 @@ impl Indexable for Engine {
     fn get_index(
         language: Option<Language>,
     ) -> Option<&'static vector_space_model2::Index<Self::Document, Self::Metadata>> {
-        index::get(language.expect("Language required"))
+        let language = language.expect("Language required");
+        indexes::get().word().foreign(language)
     }
 }
 
@@ -65,40 +65,6 @@ impl SearchEngine for Engine {
             }
         }
 
-        /*
-        let doc_store = index.get_vector_store();
-        let result_count = index
-            .build_vector(&terms, None)
-            .map(|i| {
-                i.vec_indices()
-                    .map(|dim| doc_store.dimension_size(dim))
-                    .sum::<usize>()
-            })
-            .unwrap_or(0);
-
-        let mut query = document_vector::DocumentVector::new(term_indexer, query_document.clone())?;
-
-
-        let result_count = query
-            .vector()
-            .vec_indices()
-            .map(|dim| doc_store.dimension_size(dim))
-            .sum::<usize>();
-
-        if result_count < 15 {
-            // Add substrings of query to query document vector
-            let sub_terms: Vec<_> = GenDoc::sub_documents(&query_document)
-                .into_iter()
-                .map(|i| document_vector::Document::get_terms(&i))
-                .flatten()
-                .collect();
-
-            query.add_terms(term_indexer, &sub_terms, true, Some(0.3));
-        }
-
-        Some((query, query_document.as_query()))
-        */
-
         let vec = index.build_vector(&terms, Some(&TFIDF))?;
         Some((vec, query.to_string()))
     }
@@ -106,10 +72,10 @@ impl SearchEngine for Engine {
     fn align_query<'b>(
         original: &'b str,
         index: &vector_space_model2::Index<Self::Document, Self::Metadata>,
-        language: Option<Language>,
+        _language: Option<Language>,
     ) -> Option<&'b str> {
         let query_str = original;
-        let mut indexer = index.get_indexer().clone();
+        let indexer = index.get_indexer();
 
         let has_term = indexer.find_term(&query_str).is_some()
             || indexer.find_term(&query_str.to_lowercase()).is_some();
@@ -118,13 +84,15 @@ impl SearchEngine for Engine {
             return None;
         }
 
-        let tree = index::get_term_tree(language?)?;
+        /*
         let mut res = tree.find(&query_str.to_string(), 1);
         if res.is_empty() {
             res = tree.find(&query_str.to_string(), 2);
         }
         res.sort_by(|a, b| a.1.cmp(&b.1));
         res.get(0).map(|i| i.0.as_str())
+        */
+        None
     }
 }
 
@@ -134,7 +102,8 @@ pub fn guess_language(query: &str) -> Vec<Language> {
     let possible_langs = Language::iter_word()
         .filter(|language| {
             // Filter languages that can theoretically build valid document vectors
-            Engine::gen_query_vector(index::get(*language).unwrap(), query, false, None).is_some()
+            let index = indexes::get().word().foreign(*language).unwrap();
+            Engine::gen_query_vector(index, query, false, None).is_some()
         })
         .collect::<Vec<_>>();
 
@@ -162,11 +131,8 @@ pub fn guess_language(query: &str) -> Vec<Language> {
 
 #[cfg(test)]
 mod test {
-    use std::{path::PathBuf, time::Instant};
-
-    use config::{Config, SearchConfig, ServerConfig};
-
     use super::*;
+    use std::time::Instant;
 
     #[test]
     fn test_guess_lang() {
@@ -190,32 +156,8 @@ mod test {
     }
 
     fn load_data() {
-        // never do this in production!
-        let mut config = Config::new(Some(PathBuf::from("../../data/config.toml"))).unwrap();
-        config.search = Some(SearchConfig {
-            indexes_source: Some(String::from("../../indexes")),
-            search_timeout: None,
-            suggestion_timeout: None,
-            suggestion_sources: Some(String::from("../../suggestions")),
-            report_queries_after: None,
-        });
-
-        config.server = ServerConfig {
-            storage_data: Some(String::from("../../resources/storage_data")),
-            ..ServerConfig::default()
-        };
-
-        /*
-        resources::initialize_resources(
-            config.get_storage_data_path().as_str(),
-            config.get_radical_map_path().as_str(),
-            config.get_sentences_path().as_str(),
-            config.get_kreading_freq_path().as_str(),
-        )
-        .expect("Failed to load resources");
-        */
-
-        index::load("../../indexes").unwrap();
+        indexes::storage::load("../../resources/indexes").expect("Failed to load indexes");
+        resources::load("../../resources/storage_data").expect("Failed to load resources");
     }
 }
 

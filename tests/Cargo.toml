@@ -1,0 +1,16 @@
+[package]
+name = "tests"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dev-dependencies]
+search = { path = "../lib/search" }
+japanese = { path = "../lib/japanese" }
+resources = { path = "../lib/resources" }
+test-case = "2.1.0"
+
+[[test]]
+name = "test_furigana"
+path = "test_furigana.rs"

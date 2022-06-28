@@ -1,13 +1,12 @@
-pub mod accent;
 pub mod furigana;
 pub mod guessing;
 pub mod radicals;
 
-use itertools::Itertools;
-use std::iter;
-use utils;
-
 pub use romaji;
+
+use itertools::Itertools;
+use std::{iter, ops::Range};
+use utils;
 
 const RADICALS: &[char] = &[
     '｜', 'ノ', '⺅', 'ハ', '⺉', 'マ', 'ユ', '⻌', '⺌', 'ヨ', '⺖', '⺘', '⺡', '⺨', '⺾', '⻏',
@@ -84,9 +83,11 @@ impl JapaneseExt for char {
 
     #[inline]
     fn get_text_type(&self) -> CharType {
-        if self.is_kana() {
+        if self.is_symbol() {
+            CharType::Symbol
+        } else if self.is_kana() {
             CharType::Kana
-        } else if self.is_kanji() || self.is_roman_letter() || self.is_symbol() {
+        } else if self.is_kanji() || self.is_roman_letter() {
             CharType::Kanji
         } else {
             CharType::Other
@@ -149,10 +150,14 @@ impl JapaneseExt for char {
 
     #[inline]
     fn is_symbol(&self) -> bool {
+        // https://www.htmlsymbols.xyz/ascii-symbols/fullwidth-ascii-variants
         ((*self) >= '\u{3000}' && (*self) <= '\u{303F}')
             || ((*self) >= '\u{0370}' && (*self) <= '\u{03FF}')
             || ((*self) >= '\u{25A0}' && (*self) <= '\u{25FF}')
-            || ((*self) >= '\u{FF00}' && (*self) <= '\u{FFEF}')
+            || ((*self) >= '\u{FF01}' && (*self) <= '\u{FF0F}')
+            || ((*self) >= '\u{FF1A}' && (*self) <= '\u{FF20}')
+            || ((*self) >= '\u{FF3B}' && (*self) <= '\u{FF40}')
+            || ((*self) >= '\u{FF5B}' && (*self) <= '\u{FF5E}')
             || (*self) == '\u{002D}'
             || (*self) == '\u{3005}'
             || (*self) == '\u{00D7}'
@@ -216,6 +221,42 @@ impl JapaneseExt for char {
     }
 }
 
+/// Convert Wide-alphanumeric into normal ASCII  [Ａ -> A]
+#[inline]
+pub fn to_halfwidth(s: &str) -> String {
+    shift_unicode(s, 0xff01..0xff5f, |x| x - 0xfee0)
+}
+
+/// Convert Wide-alphanumeric into normal ASCII  [Ａ -> A]
+#[inline]
+pub fn to_fullwidth(s: &str) -> String {
+    shift_unicode(s, 0x0021..0x007f, |x| x + 0xfee0)
+}
+
+#[inline]
+fn shift_unicode<D, S: AsRef<str>>(s: S, range: Range<u32>, conv: D) -> String
+where
+    D: Fn(u32) -> u32,
+{
+    s.as_ref()
+        .chars()
+        .map(|c| map_char(c, range.clone(), &conv))
+        .collect()
+}
+
+#[inline]
+fn map_char<D>(c: char, range: Range<u32>, conv: D) -> char
+where
+    D: FnOnce(u32) -> u32,
+{
+    let n = c as u32;
+    if range.contains(&n) {
+        char::from_u32(conv(n)).unwrap()
+    } else {
+        c
+    }
+}
+
 impl JapaneseExt for str {
     #[inline]
     fn is_of_type(&self, ct: CharType) -> bool {
@@ -235,28 +276,28 @@ impl JapaneseExt for str {
 
     #[inline]
     fn has_kana(&self) -> bool {
-        self.chars().into_iter().any(|s| s.is_kana())
+        self.chars().any(|s| s.is_kana())
     }
 
     #[inline]
     fn is_kana(&self) -> bool {
-        !self.chars().into_iter().any(|s| !s.is_kana())
+        self.chars().all(|s| s.is_kana())
     }
 
     #[inline]
     fn is_kanji(&self) -> bool {
-        !self.chars().into_iter().any(|s| !s.is_kanji())
+        self.chars().all(|s| s.is_kanji())
     }
 
     #[inline]
     fn has_kanji(&self) -> bool {
-        self.chars().into_iter().any(|s| s.is_kanji())
+        self.chars().any(|s| s.is_kanji())
     }
 
     #[inline]
     fn is_japanese(&self) -> bool {
         let mut buf = [0; 16];
-        !self.chars().into_iter().any(|c| {
+        !self.chars().any(|c| {
             let s = c.encode_utf8(&mut buf);
             !s.is_kana() && !s.is_kanji() && !s.is_symbol() && !s.is_roman_letter()
         })
@@ -265,7 +306,7 @@ impl JapaneseExt for str {
     #[inline]
     fn has_japanese(&self) -> bool {
         let mut buf = [0; 16];
-        self.chars().into_iter().any(|c| {
+        self.chars().any(|c| {
             let s = c.encode_utf8(&mut buf);
             s.is_kana() || s.is_kanji() || s.is_symbol() || s.is_roman_letter()
         })
@@ -273,27 +314,27 @@ impl JapaneseExt for str {
 
     #[inline]
     fn is_katakana(&self) -> bool {
-        !self.chars().into_iter().any(|s| !s.is_katakana())
+        self.chars().all(|s| s.is_katakana())
     }
 
     #[inline]
     fn is_hiragana(&self) -> bool {
-        !self.chars().into_iter().any(|s| !s.is_hiragana())
+        self.chars().all(|s| s.is_hiragana())
     }
 
     #[inline]
     fn kanji_count(&self) -> usize {
-        self.chars().into_iter().filter(|i| i.is_kanji()).count()
+        self.chars().filter(|i| i.is_kanji()).count()
     }
 
     #[inline]
     fn is_symbol(&self) -> bool {
-        !self.chars().into_iter().any(|s| !s.is_symbol())
+        self.chars().all(|s| s.is_symbol())
     }
 
     #[inline]
     fn has_symbol(&self) -> bool {
-        self.chars().into_iter().any(|s| s.is_symbol())
+        self.chars().any(|s| s.is_symbol())
     }
 
     #[inline]
@@ -303,22 +344,22 @@ impl JapaneseExt for str {
 
     #[inline]
     fn has_roman_letter(&self) -> bool {
-        self.chars().into_iter().any(|s| s.is_roman_letter())
+        self.chars().any(|s| s.is_roman_letter())
     }
 
     #[inline]
     fn is_roman_letter(&self) -> bool {
-        !self.chars().into_iter().any(|s| !s.is_roman_letter())
+        self.chars().all(|s| s.is_roman_letter())
     }
 
     #[inline]
 
     fn is_small_katakana(&self) -> bool {
-        !self.chars().into_iter().any(|s| !s.is_small_katakana())
+        self.chars().all(|s| s.is_small_katakana())
     }
     #[inline]
     fn is_small_hiragana(&self) -> bool {
-        !self.chars().into_iter().any(|s| !s.is_small_hiragana())
+        self.chars().all(|s| s.is_small_hiragana())
     }
 
     #[inline]
@@ -328,12 +369,12 @@ impl JapaneseExt for str {
 
     #[inline]
     fn is_radical(&self) -> bool {
-        !self.chars().into_iter().any(|s| !s.is_radical())
+        self.chars().all(|s| s.is_radical())
     }
 
     #[inline]
     fn is_particle(&self) -> bool {
-        !self.chars().into_iter().any(|s| !s.is_particle())
+        self.chars().all(|s| s.is_particle())
     }
 
     #[inline]
@@ -358,6 +399,7 @@ pub fn romaji_prefix(romaji: &str, hira: &str) -> bool {
 pub enum CharType {
     Kana,
     Kanji,
+    Symbol,
     Other,
 }
 
@@ -407,7 +449,7 @@ pub fn has_reading<'a>(
     kanji_literal: char,
     reading: &'a str,
 ) -> impl Iterator<Item = bool> + 'a {
-    furigana::from_str(furigana)
+    furigana::parse::from_str(furigana)
         .filter_map(move |i| i.kanji.and_then(|k| k.contains(kanji_literal).then(|| i)))
         .map(move |i| match_reading(i.kanji.unwrap(), i.kana, kanji_literal, reading))
 }
@@ -438,4 +480,45 @@ fn match_reading(comp: &str, comp_reading: &str, k_literal: char, reading: &str)
 
     // Impossible to check against other cases
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use test_case::test_case;
+
+    use crate::{text_parts, to_fullwidth, to_halfwidth, JapaneseExt};
+
+    #[test_case("音",true; "音")]
+    #[test_case("あ",false; "Kana 'a'")]
+    #[test_case("、",false; "Special japanese char")]
+    fn is_kanji(inp: &str, expcected: bool) {
+        assert_eq!(inp.is_kanji(), expcected);
+    }
+
+    #[test_case("、",true; "Symbol")]
+    #[test_case("音",false; "Kanji")]
+    #[test_case("あ",false; "Kana")]
+    fn is_symbol(inp: &str, expcected: bool) {
+        assert_eq!(inp.is_symbol(), expcected);
+    }
+
+    #[test_case("これは漢字で書いたテキストです", &["これは", "漢字", "で", "書", "いたテキストです"]; "Simple")]
+    #[test_case("このテキストはかなだけでかいた", &["このテキストはかなだけでかいた"]; "Kana only")]
+    #[test_case("朝に道を聞かば、夕べに死すとも可なり", &["朝", "に", "道", "を", "聞", "かば","、", "夕", "べに", "死", "すとも", "可", "なり"]; "Special char")]
+    fn test_text_parts(inp: &str, exp: &[&str]) {
+        let pairs: Vec<_> = text_parts(inp).collect();
+        let exp: Vec<_> = exp.iter().map(|i| i.to_string()).collect();
+        assert_eq!(pairs, exp);
+    }
+
+    #[test_case("1234","１２３４"; "To fullwidth")]
+    fn test_to_fullwidth(inp: &str, exp: &str) {
+        assert_eq!(to_fullwidth(inp).as_str(), exp);
+    }
+
+    #[test_case("１２３４","1234"; "To halfwidth")]
+    #[test_case("５日","5日"; "With kanji")]
+    fn test_to_halfwidth(inp: &str, exp: &str) {
+        assert_eq!(to_halfwidth(inp).as_str(), exp);
+    }
 }

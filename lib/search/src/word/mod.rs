@@ -6,8 +6,6 @@ pub mod tag_only;
 
 use crate::{
     engine::{
-        self,
-        guess::Guess,
         result::SearchResult,
         result_item::ResultItem,
         words::{
@@ -25,12 +23,12 @@ use error::Error;
 use itertools::Itertools;
 use japanese::JapaneseExt;
 use result::Item;
-
 use sentence_reader::igo_unidic::WordClass;
 use sentence_reader::output::ParseResult;
 use types::jotoba::{
     kanji::Kanji,
     languages::Language,
+    search::guess::Guess,
     words::{filter_languages, part_of_speech::PosSimple, Word},
 };
 use utils::{real_string_len, to_option};
@@ -87,8 +85,7 @@ impl<'a> Search<'a> {
 
         let sentence_parts = native_word_res
             .sentence_parts
-            .map(|i| Some(i))
-            .unwrap_or(gloss_word_res.sentence_parts);
+            .or(gloss_word_res.sentence_parts);
 
         let infl_info = native_word_res.infl_info.or(gloss_word_res.infl_info);
 
@@ -162,8 +159,8 @@ impl<'a> Search<'a> {
 
         // Set order function;
         let original_query = original_query.to_string();
-        search_task.set_order_fn(move |word, rel, q_str, _| {
-            order::japanese_search_order(word, rel, q_str, Some(&original_query))
+        search_task.with_custom_order(move |item| {
+            order::japanese_search_order(item, Some(&original_query))
         });
 
         search_task
@@ -192,14 +189,15 @@ impl<'a> Search<'a> {
             if let Some(regex_query) = self.query.as_regex_query() {
                 let limit = self.query.settings.page_size;
                 let offset = self.query.page_offset;
-                let res = regex::search(regex_query, limit, offset)?;
+                let res = regex::search(regex_query, limit as usize, offset);
                 if !res.is_empty() {
                     return Ok((res, None, None, query_str.to_string()));
                 }
             }
         }
 
-        let (query, mut sentence, word_info) = self.parse_sentence(query_str, allow_sentence);
+        let fmt_query = japanese::to_halfwidth(&self.query.query);
+        let (query, mut sentence, word_info) = self.parse_sentence(&fmt_query, allow_sentence);
 
         let original_query = if sentence.is_some() {
             word_info.as_ref().unwrap().get_inflected().clone()
@@ -219,7 +217,11 @@ impl<'a> Search<'a> {
             search_task.add_query(&self.query.query);
         }
 
-        let res = search_task.find()?;
+        let res = search_task.find();
+        /*
+        println!("{:#?}", res.iter().next().unwrap());
+        println!("{:#?}", res.iter().next().unwrap().item.get_furigana());
+        */
 
         // Put furigana to sentence
         if let Some(sentence) = &mut sentence {
@@ -300,10 +302,7 @@ impl<'a> Search<'a> {
 
         // Set order function
         let orderer = order::foreign::ForeignOrder::new();
-        search_task.set_order_fn(move |word, relevance, query, language| {
-            //order::foreign_search_order(word, relevance, query, language.unwrap(), used_lang)
-            orderer.score(word, relevance, query, language.unwrap(), used_lang)
-        });
+        search_task.with_custom_order(move |item| orderer.score(item, used_lang));
 
         search_task
     }
@@ -330,12 +329,13 @@ impl<'a> Search<'a> {
         */
 
         // Do the search
-        let mut res = search_task.find()?;
+        let mut res = search_task.find();
         let mut count = res.len();
 
         let mut infl_info = None;
         let mut sentence = None;
         let mut searched_query = self.query.query.clone();
+
         if !self.query.use_original
             && count < 50
             && could_be_romaji
@@ -396,7 +396,7 @@ impl<'a> Search<'a> {
     }
 
     fn check_other_lang(&self) -> Result<ResultData, Error> {
-        let guessed_langs = engine::words::foreign::guess_language(&self.query.query)
+        let guessed_langs = foreign::guess_language(&self.query.query)
             .into_iter()
             .filter(|i| *i != self.query.get_lang_with_override())
             .collect::<Vec<_>>();
@@ -465,34 +465,36 @@ fn furigana_by_reading(morpheme: &str, part: &sentence_reader::Part) -> Option<S
 
     let pos = wc_to_simple_pos(&part.word_class_raw());
     let morph = morpheme.to_string();
-    st.set_order_fn(move |i, _rel, _, _| {
-        let mut score: usize = 100;
-        if i.get_reading().reading != morph {
-            score = 0;
-        }
-        if let Some(pos) = pos {
-            if i.has_pos(&[pos]) {
-                score += 20;
-            } else {
-                score = score.saturating_sub(30);
-            }
-        }
-        if i.is_common() {
-            score += 2;
-        }
+    st.with_custom_order(move |item| furi_order(item.item(), &pos, &morph));
 
-        if i.get_jlpt_lvl().is_some() {
-            score += 2;
-        }
-        score
-    });
-
-    let found = st.find().ok()?;
+    let found = st.find();
     if found.is_empty() {
         return None;
     }
     let word = word_storage.by_sequence(found[0].item.sequence as u32)?;
     word.furigana.as_ref().cloned()
+}
+
+fn furi_order(i: &Word, pos: &Option<PosSimple>, morph: &str) -> usize {
+    let mut score: usize = 100;
+    if i.get_reading().reading != morph {
+        score = 0;
+    }
+    if let Some(pos) = pos {
+        if i.has_pos(&[*pos]) {
+            score += 20;
+        } else {
+            score = score.saturating_sub(30);
+        }
+    }
+    if i.is_common() {
+        score += 2;
+    }
+
+    if i.get_jlpt_lvl().is_some() {
+        score += 2;
+    }
+    score
 }
 
 pub fn wc_to_simple_pos(wc: &WordClass) -> Option<PosSimple> {
@@ -512,7 +514,7 @@ pub fn wc_to_simple_pos(wc: &WordClass) -> Option<PosSimple> {
 }
 
 pub fn guess_inp_language(query: &Query) -> Vec<Language> {
-    engine::words::foreign::guess_language(&query.query)
+    foreign::guess_language(&query.query)
         .into_iter()
         .filter(|i| *i != query.get_lang_with_override())
         .collect()
@@ -541,4 +543,15 @@ fn guess_foreign(search: Search) -> Option<Guess> {
     let mut task = search.gloss_search_task();
     task.set_align(false);
     task.estimate_result_count().ok()
+}
+
+impl ResultData {
+    #[inline]
+    pub fn new(words: Vec<Word>, count: usize) -> Self {
+        Self {
+            words,
+            count,
+            ..Default::default()
+        }
+    }
 }

@@ -21,12 +21,13 @@ pub struct Kanji {
     pub jlpt: Option<u8>,
     pub variant: Vec<String>,
     pub onyomi: Vec<String>,
+    /// Japanese name readings
+    pub nanori: Vec<String>,
     pub kunyomi: Vec<String>,
     pub chinese: Vec<String>,
     pub korean_r: Vec<String>,
     pub korean_h: Vec<String>,
     pub vietnamese: Vec<String>,
-    pub natori: Vec<String>,
     pub kun_dicts: Vec<u32>,
     pub on_dicts: Vec<u32>,
     pub similar_kanji: Vec<char>,
@@ -77,6 +78,34 @@ impl Kanji {
         };
 
         Some(Reading::new(rt, self.literal, r.to_string()))
+    }
+
+    /// Returns an iteratort over all readings
+    pub fn reading_iter(&self) -> impl Iterator<Item = (&String, u32)> {
+        self.kunyomi
+            .iter()
+            .chain(self.onyomi.iter())
+            .enumerate()
+            .map(|i| (i.1, i.0 as u32))
+    }
+
+    pub fn reading_from_pos(&self, pos: usize) -> Option<Reading> {
+        if pos < self.kunyomi.len() {
+            let r = self.kunyomi.get(pos).unwrap();
+            Some(Reading::new(
+                ReadingType::Kunyomi,
+                self.literal,
+                r.to_string(),
+            ))
+        } else {
+            let k_len = self.kunyomi.len();
+            let r = self.onyomi.get(pos - k_len)?;
+            Some(Reading::new(
+                ReadingType::Onyomi,
+                self.literal,
+                r.to_string(),
+            ))
+        }
     }
 
     #[deprecated(note = "use find_reading instead")]

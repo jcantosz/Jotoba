@@ -9,7 +9,7 @@ pub(crate) fn sentence_matches(sentence: &Sentence, reading: &Reading) -> bool {
     let lit = reading.get_lit_str();
 
     if reading.is_full_reading() {
-        let parsed_furi = japanese::furigana::from_str(&sentence.furigana);
+        let parsed_furi = japanese::furigana::parse::from_str(&sentence.furigana);
         let reading_hira = reading.get_raw().to_hiragana();
 
         for i in parsed_furi {
@@ -33,7 +33,7 @@ pub(crate) fn sentence_matches(sentence: &Sentence, reading: &Reading) -> bool {
     // Kunyomi
 
     let formatted = reading.format_reading_with_literal();
-    for morph in JA_NL_PARSER.parse(&sentence.japanese) {
+    for morph in JA_NL_PARSER.get().unwrap().parse(&sentence.japanese) {
         let reading = morph.lexeme;
         if reading == formatted {
             return true;

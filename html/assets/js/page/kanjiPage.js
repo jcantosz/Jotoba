@@ -4,7 +4,7 @@
 
 // Kanji settings
 var kanjiSettings = [];
-const Animation = {none: 0, forward: 1, backwards: 2};
+const Animation = { none: 0, forward: 1, backwards: 2 };
 
 // Default kanji speed (only used on init)
 let speed = localStorage.getItem("kanji_speed") || 1;
@@ -43,10 +43,10 @@ $(".anim-container").each((i, e) => {
 
         // If the user wants to hide Kanji on load
         if (!Settings.display.showKanjiOnLoad.val) {
-            $("#"+kanjiLiteral+"_svg > svg path:not(.bg)").each((i, e) => {
+            $("#" + kanjiLiteral + "_svg > svg path:not(.bg)").each((i, e) => {
                 e.classList.add("hidden");
                 e.style.strokeDashoffset = e.getTotalLength();
-             });
+            });
         }
 
         // If user wants to hide numbers: hide them
@@ -79,7 +79,7 @@ $('.speedSlider:not(.settings)').on('input', function () {
 function getPaths(kanjiLiteral) {
     let svg = document.getElementById(kanjiLiteral + "_svg").firstElementChild;
     return svg.querySelectorAll("path:not(.bg)");
-} 
+}
 
 // Refresh the currently running animation. Used for changing the current animation speed
 async function refreshAnimations(kanjiLiteral) {
@@ -99,7 +99,7 @@ async function refreshAnimations(kanjiLiteral) {
             // Animate and wait if the animations was automated
             let animationPromise = doAnimationStep(kanjiLiteral, paths[i], kanjiSettings[kanjiLiteral].animationDirection === Animation.forward, false);
             if (kanjiSettings[kanjiLiteral].isAutomated) {
-                kanjiSettings[kanjiLiteral].index = i+1;
+                kanjiSettings[kanjiLiteral].index = i + 1;
                 await animationPromise;
 
                 if (startTime < kanjiSettings[kanjiLiteral].timestamp) {
@@ -135,7 +135,7 @@ function prepareAutoplay(kanjiLiteral) {
 
 // Prepares the last steps to end auto-playing an animation
 function concludeAutoplay(kanjiLiteral) {
-    let playBtn = document.getElementById(kanjiLiteral+ "_play");
+    let playBtn = document.getElementById(kanjiLiteral + "_play");
 
     kanjiSettings[kanjiLiteral].isAutomated = false;
 
@@ -146,19 +146,19 @@ function concludeAutoplay(kanjiLiteral) {
 
 // Based on the current state, show or pause the animation
 async function doOrPauseAnimation(kanjiLiteral) {
-    let playBtn = document.getElementById(kanjiLiteral+ "_play");
+    let playBtn = document.getElementById(kanjiLiteral + "_play");
 
     if (playBtn.dataset.state === "play") {
         if (kanjiSettings[kanjiLiteral].index == kanjiSettings[kanjiLiteral].strokeCount) {
             await undoAnimation(kanjiLiteral, true);
         }
-        
+
         doAnimation(kanjiLiteral);
         return;
     }
 
     pauseAnimation(kanjiLiteral);
-} 
+}
 
 // Automatically draws the whole image
 async function doAnimation(kanjiLiteral) {
@@ -219,7 +219,7 @@ async function undoAnimation(kanjiLiteral, awaitLast) {
 async function pauseAnimation(kanjiLiteral) {
     kanjiSettings[kanjiLiteral].timestamp = Date.now();
 
-    let playBtn = document.getElementById(kanjiLiteral+ "_play");
+    let playBtn = document.getElementById(kanjiLiteral + "_play");
 
     playBtn.dataset.state = "play";
     playBtn.children[0].classList.remove("hidden");
@@ -306,3 +306,165 @@ $(document).on("keypress", (event) => {
         $(".compounds-parent").toggleClass("hidden");
     }
 });
+
+/* -- Kanji decomposition tree -- */
+var pendingRequests = 0;
+var lastTreeLiteral = "";
+
+// Generates the tree diagram
+async function generateTreeDiagram(kanjiLiteral) {
+    var width = 1000,
+        height = 1000,
+        i = 0;
+    lastTreeLiteral = kanjiLiteral;
+
+    var tree = d3.layout.tree()
+        .size([height, width]);
+
+    // set visible
+    document.getElementById("tree-target").innerHTML = "";
+    document.getElementById("backdrop").classList.remove("hidden");
+
+    // Add the SVG to the body
+    var svg = d3.select("#tree-target").append("svg")
+        .classed("svg-content-responsive", true)
+        .classed("svg-container", true)
+        .attr("preserveAspectRatio", "xMinYMin meet")
+        .attr("viewBox", "0 0 " + width + " " + height)
+        .append("g");
+
+    // Build the tree
+    let treeData = await API.getGraphData(kanjiLiteral);
+    root = treeData.tree;
+
+    // Compute the new tree layout
+    var nodes = tree.nodes(root).reverse(),
+        links = tree.links(nodes);
+
+    // Normalize for fixed-depth
+    nodes.forEach((d) => { d.y = d.depth * 100; });
+
+    // Declare the nodes
+    var node = svg.selectAll("g.node")
+        .data(nodes, (d) => { return d.id || (d.id = ++i); });
+
+    // Declare the links
+    var link = svg.selectAll("path.link")
+        .data(links, (d) => { return d.target.id; });
+
+    // Enter the nodes
+    var nodeEnter = node.enter().append("g")
+        .attr("class", "node")
+        .attr("transform", (d) => {
+            return "translate(" + d.x + "," + d.y + ")";
+        });
+
+    // Circle style, color, fill
+    nodeEnter.append("circle")
+        .attr("r", 25)
+        .style("fill", "rgba(222,227,231,255)");
+
+    // Text
+    nodeEnter.append("text")
+        .attr("y", (d) => { // Text offset
+            return d.children || d._children ? 5 : 5;
+        })
+        .attr("text-anchor", "middle")
+        .text((d) => { return d.name; })
+        .style("fill-opacity", 1)
+        .attr("has_data", (d) => {return d.literal_available});
+
+    // Straight lines
+    link.enter().insert("line")
+        .attr("class", "link")
+        .attr("x1", (d) => { return d.source.x; })
+        .attr("y1", (d) => { return d.source.y; })
+        .attr("x2", (d) => { return d.target.x; })
+        .attr("y2", (d) => { return d.target.y; });
+
+    // Move lines in front of circle to hide the lines (only needed for straight lines)
+    document.querySelectorAll("#tree-target .link").forEach(e => {
+        var node = e;
+        var parent = e.parentNode;
+        parent.removeChild(node);
+        parent.prepend(e);
+    });
+
+    // Figure out how many requests are required
+    const srcUrl = "/assets/svg/glyphes/";
+    document.querySelectorAll("#tree-target text").forEach((e) => {
+        getSvgContent(e, srcUrl + e.innerHTML + ".svg");
+        pendingRequests++;
+    });
+
+    svg = document.querySelector('#tree-target svg');
+
+    // Calculate new Viewbox of SVG containing all children
+    const { xMin, xMax, yMin, yMax } = [...svg.children].reduce((acc, el) => {
+        const { x, y, width, height } = el.getBBox();
+        if (!acc.xMin || x < acc.xMin) acc.xMin = x;
+        if (!acc.xMax || x + width > acc.xMax) acc.xMax = x + width;
+        if (!acc.yMin || y < acc.yMin) acc.yMin = y;
+        if (!acc.yMax || y + height > acc.yMax) acc.yMax = y + height;
+        return acc;
+    }, {});
+
+    // Update viewbox
+    const viewbox = `${xMin} ${yMin} ${xMax - xMin} ${yMax - yMin}`;
+    svg.setAttribute('viewBox', viewbox);
+
+    // Set toggler content if available
+    if (treeData.has_big) {
+        let toggler = document.getElementById("tree-toggle"); 
+        toggler.classList.remove("hidden");
+        if (Settings.search.showFullGraph.val) {
+            toggler.classList.add("detailed");
+        }
+    }
+}
+
+// Tries to replace the given target with an SVG using the given URL
+function getSvgContent(target, url) {
+    $.ajax({ 
+        type : "GET", 
+        url : url, 
+
+        // Called upon server reponse
+        success : function(result) { 
+            
+            // Check if the result is actually an SVG or rather the 404 page
+            if (typeof result !== "object") {
+                return;
+            }
+
+            // Add action btn to the circle if possible
+            if (target.getAttribute("has_data") === "true") {
+                target.previousElementSibling.classList.add("clickable");
+                target.previousElementSibling.addEventListener("click", () => {
+                    location.href = JotoTools.createUrl(target.innerHTML, 1);
+                });
+            }
+
+            // Replace text element with SVG
+            target.replaceWith(result.firstElementChild.firstElementChild);
+        }, 
+
+        // Handle unexpected request errors
+        error : function(result) { 
+            console.log("caught error on decomposition tree:", result);
+        } 
+    }); 
+}
+
+// Called upon clicking on the toggle checkbox for a decomposition graph: rerenders the graph in the toggled complexity
+function onGraphToggleCheckboxClick(event) {
+    if (window.umami) {
+        umami.trackEvent("Tree toggled", "function_press");
+    }
+    
+    Settings.alterSearch('showFullGraph', !Settings.search.showFullGraph.val);
+    generateTreeDiagram(lastTreeLiteral);
+
+    let toggler = document.getElementById("tree-toggle"); 
+    toggler.classList.toggle("detailed");
+}

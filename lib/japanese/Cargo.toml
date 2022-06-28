@@ -10,3 +10,9 @@ edition = "2021"
 utils = { path = "../utils" }
 itertools = "0.10.3"
 romaji = "0.1.1"
+
+
+[dev-dependencies]
+test-case = "2.1.0"
+resources = { path = "../resources" }
+japanese = { path = "../japanese" }

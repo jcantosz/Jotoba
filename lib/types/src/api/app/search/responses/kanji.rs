@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::jotoba::kanji::radical::DetailedRadical;
 
@@ -15,7 +15,7 @@ impl Response {
 }
 
 /// Kanji information
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Kanji {
     pub literal: char,
     pub stroke_count: u8,
@@ -38,7 +38,7 @@ pub struct Kanji {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub korean_hangul: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub natori: Vec<String>,
+    pub nanori: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub similar_kanji: Vec<char>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -65,7 +65,7 @@ impl Kanji {
 }
 
 /// A word used in kanji compounds
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CompoundWord {
     pub jp: String,
     pub kana: String,
@@ -113,7 +113,7 @@ impl From<crate::jotoba::kanji::Kanji> for Kanji {
             chinese: k.chinese,
             korean_romaji: k.korean_r,
             korean_hangul: k.korean_h,
-            natori: k.natori,
+            nanori: k.nanori,
             similar_kanji: k.similar_kanji,
             meanings: k.meanings,
             parts: k.parts,
