@@ -205,12 +205,12 @@ impl<T: SearchEngine> SearchTask<T> {
 
     fn find_by_vec<I: Pushable<Item = ResultItem<T::Output>>>(&self, q_vec: Vector, out: &mut I) {
         // Retrieve all document vectors that share at least one dimension with the query vector
-        let vecs = self
-            .get_index()
-            .get_vector_store()
-            .get_for_vec(&q_vec)
+        let dims = T::vec_dims(self.get_index(), &q_vec);
+        let vecstore = self.get_index().get_vector_store();
+        let vecs = vecstore
+            .load_documents_iter(vecstore.get_in_dims_iter2(dims.into_iter()))
             .take(self.vector_limit);
-
+        let vecs = self.get_index().get_vector_store().get_for_vec(&q_vec);
         self.load_documents_to(vecs, &q_vec, out);
     }
 

@@ -91,4 +91,9 @@ pub trait SearchEngine: Indexable {
     fn query_formatted(inp: &str) -> String {
         inp.to_string()
     }
+
+    #[inline]
+    fn vec_dims(index: &Self::Index, vec: &Vector) -> Vec<u32> {
+        vec.vec_indices().collect()
+    }
 }

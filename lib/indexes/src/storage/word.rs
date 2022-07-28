@@ -77,7 +77,8 @@ impl WordStore {
 pub(crate) fn load<P: AsRef<Path>>(path: P) -> Result<WordStore, Box<dyn Error + Sync + Send>> {
     let start = std::time::Instant::now();
     let foreign = load_foreign(path.as_ref())?;
-    let native = NativeIndex::open(path.as_ref().join(NATIVE_FILE))?;
+    //    let native = NativeIndex::open(path.as_ref().join(NATIVE_FILE))?;
+    let native = utils::deser_file(path.as_ref(), NATIVE_FILE)?;
     let regex = utils::deser_file(path.as_ref(), REGEX_FILE)?;
     let relevance = load_rel_index(path.as_ref())?;
     debug!(
@@ -93,9 +94,11 @@ pub(crate) fn load<P: AsRef<Path>>(path: P) -> Result<WordStore, Box<dyn Error +
 pub(crate) fn load<P: AsRef<Path> + Send + Sync>(
     path: P,
 ) -> Result<WordStore, Box<dyn Error + Send + Sync>> {
+    use crate::storage::utils::deser_file;
+
     let start = std::time::Instant::now();
     let mut foreign = None;
-    let mut native = None;
+    let mut native: Option<Result<ngindex::NGIndex<u32>, Box<dyn Error + Send + Sync>>> = None;
     let mut regex: Option<Result<RegexSearchIndex, Box<dyn Error + Send + Sync>>> = None;
     let mut relevance = None;
     let mut k_reading = None;
@@ -104,7 +107,8 @@ pub(crate) fn load<P: AsRef<Path> + Send + Sync>(
             foreign = Some(load_foreign(path.as_ref()));
         });
         s.spawn(|_| {
-            native = Some(NativeIndex::open(path.as_ref().join(NATIVE_FILE)));
+            //native = Some(NativeIndex::(path.as_ref().join(NATIVE_FILE)));
+            native = Some(deser_file(path.as_ref(), NATIVE_FILE));
         });
         s.spawn(|_| {
             regex = Some(utils::deser_file(path.as_ref(), REGEX_FILE));

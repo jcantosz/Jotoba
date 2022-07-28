@@ -1,6 +1,7 @@
 use japanese::{furigana::SentencePartRef, JapaneseExt};
 use sentence_reader::{output::ParseResult, Parser, Part, Sentence};
 use types::jotoba::words::{part_of_speech::PosSimple, Word};
+use utils::real_string_len;
 
 use crate::{
     engine::{self, search_task::cpushable::FilteredMaxCounter, words::native, SearchTask},
@@ -114,6 +115,11 @@ impl<'a> Producer for SReaderProducer<'a> {
             return true;
         }
 
+        // No sentence reader for 1-3 char queries
+        if real_string_len(&self.query.query_str) <= 3 {
+            return false;
+        }
+
         // For sentences only run if the query is not a term in the db
         !word_exists(&self.query.query_str)
     }
@@ -136,10 +142,6 @@ impl<'a> Producer for SReaderProducer<'a> {
 
 /// Returns `true` if the word exists in all words
 fn word_exists(term: &str) -> bool {
-    if !NativeSearch::has_term(term) {
-        return false;
-    }
-
     let mut task = SearchTask::<native::Engine>::new(term).limit(1);
 
     let query = term.to_string();
@@ -152,6 +154,7 @@ fn word_exists(term: &str) -> bool {
     });
 
     let len = task.find_exact().len();
+    println!("len: {len}");
     len > 0
 }
 

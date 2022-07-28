@@ -1,5 +1,6 @@
 use crate::webserver::prepare_data;
 use config::Config;
+use search::engine::Index;
 use types::jotoba::languages::Language;
 
 /// Checks resources and returns `true` if required features are available

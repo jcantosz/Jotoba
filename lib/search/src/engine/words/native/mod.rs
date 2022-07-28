@@ -1,7 +1,7 @@
 pub mod k_reading;
 pub mod regex;
 
-use crate::engine::{Indexable, SearchEngine};
+use crate::engine::{search_task::sort_item::SortItem, Index, Indexable, SearchEngine};
 use indexes::words::NativeIndex;
 use japanese::JapaneseExt;
 use types::jotoba::{languages::Language, words::Word};
@@ -15,9 +15,7 @@ impl Indexable for Engine {
     type Index = NativeIndex;
 
     #[inline]
-    fn get_index(
-        _language: Option<Language>,
-    ) -> Option<&'static vector_space_model2::Index<Self::Document, Self::Metadata>> {
+    fn get_index(_language: Option<Language>) -> Option<&'static Self::Index> {
         Some(indexes::get().word().native())
     }
 }
@@ -31,15 +29,15 @@ impl SearchEngine for Engine {
     }
 
     fn gen_query_vector(
-        index: &vector_space_model2::Index<Self::Document, Self::Metadata>,
+        index: &Self::Index,
         query: &str,
         _allow_align: bool,
         _language: Option<Language>,
     ) -> Option<(Vector, String)> {
-        let fmt_query = Self::query_formatted(query);
+        /* let fmt_query = Self::query_formatted(query);
         let mut terms = vec![(fmt_query.clone(), 1.0)];
 
-        let indexer = index.get_indexer();
+        let indexer = index.index().get_indexer();
         for term in tinysegmenter::tokenize(&fmt_query) {
             let indexed = indexer.find_term(&term)?;
             if indexed.doc_frequency() >= 5_000 || terms.iter().any(|i| i.0 == term) {
@@ -49,8 +47,10 @@ impl SearchEngine for Engine {
             terms.push((term, 0.03));
         }
 
-        let vec = index.build_vector_weights(&terms)?;
-        Some((vec, fmt_query))
+        let vec = index.build_vector_weights(&terms)?; */
+        let vec = index.make_query_vec(query)?;
+        //let dims = self.light_vec_dims(query, tf_threshold);
+        Some((vec, query.to_string()))
     }
 
     #[inline]
